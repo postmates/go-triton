@@ -181,14 +181,15 @@ func main() {
 		panic(err)
 	}
 
-	sc, err := c.ConfigForName("test")
+	sc, err := c.ConfigForName("courier_activity")
 	if err != nil {
 		panic(err)
 	}
 
-	svc := kinesis.New(&aws.Config{Region: sc.RegionName})
-
-	s := triton.NewStream(svc, "courier_activity_prod", "shard-0000")
+	s, err := triton.OpenStream(sc, 0)
+	if err != nil {
+		panic(err)
+	}
 
 	for {
 		r, err := s.Read()
@@ -196,6 +197,6 @@ func main() {
 			panic(err)
 		}
 
-		fmt.Printf("Record %v %v\n", s.NextIteratorValue, r.SequenceNumber)
+		fmt.Printf("Record %v\n", *r.SequenceNumber)
 	}
 }

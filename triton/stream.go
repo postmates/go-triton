@@ -1,9 +1,12 @@
 package triton
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	//"github.com/aws/aws-sdk-go/aws/awsutil"
 	"github.com/aws/aws-sdk-go/service/kinesis"
 )
 
@@ -113,4 +116,29 @@ func NewStream(svc KinesisService, streamName string, shardId string) (s *Stream
 	}
 
 	return s
+}
+
+func OpenStream(sc *StreamConfig, shardNum int) (s *Stream, err error) {
+	svc := kinesis.New(&aws.Config{Region: sc.RegionName})
+
+	resp, err := svc.DescribeStream(&kinesis.DescribeStreamInput{StreamName: aws.String(sc.StreamName)})
+	if err != nil {
+		if awsErr, ok := err.(awserr.Error); ok {
+			if awsErr.Code() == "ResourceNotFoundException" {
+				return nil, fmt.Errorf("Failed to find stream %v", awsErr.Message())
+			}
+		}
+		return nil, err
+	}
+
+	if len(resp.StreamDescription.Shards) < shardNum {
+		err = fmt.Errorf("Stream doesn't have a shard %d", shardNum)
+		return nil, err
+	}
+
+	shardID := *resp.StreamDescription.Shards[shardNum].ShardID
+
+	s = NewStream(svc, sc.StreamName, shardID)
+
+	return s, nil
 }
