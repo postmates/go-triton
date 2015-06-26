@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awsutil"
 	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/golang/snappy/snappy"
+	"github.com/postmates/postal-go-triton/triton"
 	"gopkg.in/vmihailenco/msgpack.v2"
 )
 
@@ -125,10 +126,30 @@ func main2() {
 }
 
 func main() {
-	svc := kinesis.New(&aws.Config{Region: "us-west-1"})
+	fname := os.Getenv("TRITON_CONFIG")
+	if fname == "" {
+		fmt.Println("TRITON_CONFIG not specific")
+		os.Exit(1)
+	}
 
-	streamName := "courier_activity_dev"
-	resp, err := svc.DescribeStream(&kinesis.DescribeStreamInput{StreamName: &streamName})
+	f, err := os.Open(fname)
+	if err != nil {
+		panic(err)
+	}
+
+	c, err := triton.NewConfigFromFile(f)
+	if err != nil {
+		panic(err)
+	}
+
+	sc, err := c.ConfigForName("test")
+	if err != nil {
+		panic(err)
+	}
+
+	svc := kinesis.New(&aws.Config{Region: sc.RegionName})
+
+	resp, err := svc.DescribeStream(&kinesis.DescribeStreamInput{StreamName: &sc.StreamName})
 	if err != nil {
 		if awsErr, ok := err.(awserr.Error); ok {
 			if awsErr.Code() == "ResourceNotFoundException" {
