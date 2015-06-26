@@ -22,7 +22,7 @@ type CourierLocation struct {
 	Lng       float64 `msgpack:"lng"`
 }
 
-func main3() {
+func main1() {
 	inFile, err := os.Open("courier_location.mp")
 	if err != nil {
 		log.Fatal(err)
@@ -125,7 +125,7 @@ func main2() {
 	}
 }
 
-func main() {
+func main3() {
 	fname := os.Getenv("TRITON_CONFIG")
 	if fname == "" {
 		fmt.Println("TRITON_CONFIG not specific")
@@ -162,4 +162,40 @@ func main() {
 	}
 	fmt.Println(awsutil.StringValue(resp))
 
+}
+
+func main() {
+	fname := os.Getenv("TRITON_CONFIG")
+	if fname == "" {
+		fmt.Println("TRITON_CONFIG not specific")
+		os.Exit(1)
+	}
+
+	f, err := os.Open(fname)
+	if err != nil {
+		panic(err)
+	}
+
+	c, err := triton.NewConfigFromFile(f)
+	if err != nil {
+		panic(err)
+	}
+
+	sc, err := c.ConfigForName("test")
+	if err != nil {
+		panic(err)
+	}
+
+	svc := kinesis.New(&aws.Config{Region: sc.RegionName})
+
+	s := triton.NewStream(svc, "courier_activity_prod", "shard-0000")
+
+	for {
+		r, err := s.Read()
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Printf("Record %v %v\n", s.NextIteratorValue, r.SequenceNumber)
+	}
 }

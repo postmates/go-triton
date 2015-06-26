@@ -6,4 +6,5 @@ import (
 
 type KinesisService interface {
 	GetShardIterator(*kinesis.GetShardIteratorInput) (*kinesis.GetShardIteratorOutput, error)
+	GetRecords(*kinesis.GetRecordsInput) (*kinesis.GetRecordsOutput, error)
 }
