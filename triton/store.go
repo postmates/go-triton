@@ -74,7 +74,7 @@ func (s *S3Store) getCurrentWriter() (w io.Writer, err error) {
 	return s.currentWriter, nil
 }
 
-func (s *S3Store) PutRaw(b []byte) (err error) {
+func (s *S3Store) Put(b []byte) (err error) {
 	w, err := s.getCurrentWriter()
 	if err != nil {
 		return

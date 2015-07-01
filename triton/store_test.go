@@ -1,6 +1,8 @@
 package triton
 
 import (
+	"bytes"
+	"io/ioutil"
 	"os"
 	"testing"
 	"time"
@@ -77,5 +79,32 @@ func TestOpenAndCloseWriter(t *testing.T) {
 	if s.currentWriter != nil {
 		t.Errorf("Writer still open")
 		return
+	}
+}
+
+func TestPut(t *testing.T) {
+	sc := newTestStreamConfig()
+
+	s := NewS3Store(sc, "triton-test")
+
+	testData := []byte{0x01, 0x02, 0x03}
+
+	err := s.Put(testData)
+	if err != nil {
+		t.Errorf("Failed to put %v", err)
+	}
+
+	fname := *s.currentFilename
+	defer os.Remove(fname)
+
+	s.Close()
+
+	data, err := ioutil.ReadFile(fname)
+	if err != nil {
+		t.Errorf("Failed to read %v", err)
+	} else {
+		if bytes.Compare(data, testData) != 0 {
+			t.Errorf("Data mismatch")
+		}
 	}
 }
