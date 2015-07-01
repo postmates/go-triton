@@ -193,7 +193,7 @@ func main() {
 
 	bucketName := "com.postmates.triton_dev"
 
-	st, err := triton.NewS3Store(sc, bucketName)
+	st := triton.NewS3Store(sc, bucketName)
 
 	defer st.Close()
 
@@ -203,7 +203,11 @@ func main() {
 			panic(err)
 		}
 
-		st.PutRaw(r.Data)
+		if r == nil {
+			panic("r is nil?")
+		}
+
+		st.Put(r.Data)
 
 		fmt.Printf("Record %v\n", *r.SequenceNumber)
 	}

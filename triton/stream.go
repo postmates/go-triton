@@ -79,19 +79,17 @@ func (s *Stream) fetchMoreRecords() (err error) {
 }
 
 func (s *Stream) Read() (r *kinesis.Record, err error) {
-	if len(s.records) == 0 {
-		err := s.fetchMoreRecords()
-		if err != nil {
-			return nil, err
+	for {
+		if len(s.records) > 0 {
+			r := s.records[0]
+			s.records = s.records[1:]
+			return r, nil
+		} else {
+			err := s.fetchMoreRecords()
+			if err != nil {
+				return nil, err
+			}
 		}
-	}
-
-	if len(s.records) > 0 {
-		r := s.records[0]
-		s.records = s.records[1:]
-		return r, nil
-	} else {
-		return nil, nil
 	}
 }
 
