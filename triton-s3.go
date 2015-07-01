@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/postmates/postal-go-triton/triton"
 )
@@ -34,9 +36,12 @@ func main() {
 		panic(err)
 	}
 
-	bucketName := "com.postmates.triton_dev"
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
-	st := triton.NewS3Store(sc, bucketName)
+	//bucketName := "com.postmates.triton_dev"
+
+	st := triton.NewS3Store(sc, "0000")
 
 	defer st.Close()
 
@@ -53,5 +58,12 @@ func main() {
 		st.Put(r.Data)
 
 		fmt.Printf("Record %v\n", *r.SequenceNumber)
+		select {
+		case <-sigs:
+			st.Close()
+			os.Exit(0)
+		default:
+			continue
+		}
 	}
 }

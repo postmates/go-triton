@@ -27,17 +27,17 @@ func TestNewS3Store(t *testing.T) {
 
 	sc := newTestStreamConfig()
 
-	NewS3Store(sc, "triton-test")
+	NewS3Store(sc, "0001")
 }
 
 func TestGenerateFilename(t *testing.T) {
 	sc := newTestStreamConfig()
 
-	s := NewS3Store(sc, "triton-test")
+	s := NewS3Store(sc, "0001")
 
 	n := time.Date(2015, 6, 30, 2, 45, 0, 0, time.UTC)
 	fname := s.generateFilename(n)
-	if fname != "test_stream-2015063002.tri" {
+	if fname != "test_stream-0001-2015063002.tri" {
 		t.Errorf("Bad file file %v", fname)
 	}
 }
@@ -45,7 +45,7 @@ func TestGenerateFilename(t *testing.T) {
 func TestOpenWriter(t *testing.T) {
 	sc := newTestStreamConfig()
 
-	s := NewS3Store(sc, "triton-test")
+	s := NewS3Store(sc, "0001")
 
 	w, err := s.getCurrentWriter()
 	if err != nil {
@@ -65,7 +65,7 @@ func TestOpenWriter(t *testing.T) {
 func TestOpenAndCloseWriter(t *testing.T) {
 	sc := newTestStreamConfig()
 
-	s := NewS3Store(sc, "triton-test")
+	s := NewS3Store(sc, "0001")
 
 	_, err := s.getCurrentWriter()
 	if err != nil {
@@ -87,7 +87,7 @@ func TestOpenAndCloseWriter(t *testing.T) {
 func TestPut(t *testing.T) {
 	sc := newTestStreamConfig()
 
-	s := NewS3Store(sc, "triton-test")
+	s := NewS3Store(sc, "0001")
 
 	testData := []byte{0x01, 0x02, 0x03}
 

@@ -22,6 +22,7 @@ type Store interface {
 
 type S3Store struct {
 	streamName string
+	shard      string
 	//uploader        S3UploaderService
 	currentWriter   io.WriteCloser
 	currentFilename *string
@@ -65,7 +66,7 @@ func (s *S3Store) openWriter(fname string) (err error) {
 
 func (s *S3Store) generateFilename(t time.Time) (fname string) {
 	ds := t.Format("2006010215")
-	fname = fmt.Sprintf("%s-%s.tri", s.streamName, ds)
+	fname = fmt.Sprintf("%s-%s-%s.tri", s.streamName, s.shard, ds)
 
 	return
 }
@@ -127,7 +128,7 @@ func (s *S3Store) Close() (err error) {
 
 const BUFFER_SIZE int = 1024 * 1024
 
-func NewS3Store(sc *StreamConfig, bucketName string) (s *S3Store) {
+func NewS3Store(sc *StreamConfig, shard string) (s *S3Store) {
 	/*
 		uo := &s3manager.UploadOptions{S3: svc}
 		u := s3manager.NewUploader(uo)
@@ -138,6 +139,7 @@ func NewS3Store(sc *StreamConfig, bucketName string) (s *S3Store) {
 
 	s = &S3Store{
 		streamName: sc.StreamName,
+		shard:      shard,
 		buf:        buf,
 		//uploader:   u,
 	}
