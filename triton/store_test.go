@@ -6,6 +6,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/golang/snappy/snappy"
 )
 
 type NullS3Service struct{}
@@ -99,7 +101,14 @@ func TestPut(t *testing.T) {
 
 	s.Close()
 
-	data, err := ioutil.ReadFile(fname)
+	f, err := os.Open(fname)
+	if err != nil {
+		t.Errorf("Failed to open")
+		return
+	}
+
+	df := snappy.NewReader(f)
+	data, err := ioutil.ReadAll(df)
 	if err != nil {
 		t.Errorf("Failed to read %v", err)
 	} else {
