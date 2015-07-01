@@ -6,6 +6,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/postmates/postal-go-triton/triton"
 )
 
@@ -39,9 +41,12 @@ func main() {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
-	//bucketName := "com.postmates.triton_dev"
+	bucketName := "postal-triton-dev"
 
-	st := triton.NewS3Store(sc, "0000")
+	svc := s3.New(&aws.Config{Region: sc.RegionName})
+	u := triton.NewUploader(svc, bucketName)
+
+	st := triton.NewStore(sc, "0000", u)
 
 	defer st.Close()
 

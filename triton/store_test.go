@@ -22,18 +22,18 @@ func newTestStreamConfig() *StreamConfig {
 	return &sc
 }
 
-func TestNewS3Store(t *testing.T) {
+func TestNewStore(t *testing.T) {
 	//svc := NullS3Service{}
 
 	sc := newTestStreamConfig()
 
-	NewS3Store(sc, "0001")
+	NewStore(sc, "0001", nil)
 }
 
 func TestGenerateFilename(t *testing.T) {
 	sc := newTestStreamConfig()
 
-	s := NewS3Store(sc, "0001")
+	s := NewStore(sc, "0001", nil)
 
 	n := time.Date(2015, 6, 30, 2, 45, 0, 0, time.UTC)
 	fname := s.generateFilename(n)
@@ -45,7 +45,7 @@ func TestGenerateFilename(t *testing.T) {
 func TestOpenWriter(t *testing.T) {
 	sc := newTestStreamConfig()
 
-	s := NewS3Store(sc, "0001")
+	s := NewStore(sc, "0001", nil)
 
 	w, err := s.getCurrentWriter()
 	if err != nil {
@@ -65,7 +65,7 @@ func TestOpenWriter(t *testing.T) {
 func TestOpenAndCloseWriter(t *testing.T) {
 	sc := newTestStreamConfig()
 
-	s := NewS3Store(sc, "0001")
+	s := NewStore(sc, "0001", nil)
 
 	_, err := s.getCurrentWriter()
 	if err != nil {
@@ -87,7 +87,7 @@ func TestOpenAndCloseWriter(t *testing.T) {
 func TestPut(t *testing.T) {
 	sc := newTestStreamConfig()
 
-	s := NewS3Store(sc, "0001")
+	s := NewStore(sc, "0001", nil)
 
 	testData := []byte{0x01, 0x02, 0x03}
 
