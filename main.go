@@ -191,11 +191,19 @@ func main() {
 		panic(err)
 	}
 
+	bucketName := "com.postmates.triton_dev"
+
+	st, err := triton.NewS3Store(sc, bucketName)
+
+	defer st.Close()
+
 	for {
 		r, err := s.Read()
 		if err != nil {
 			panic(err)
 		}
+
+		st.PutRaw(r.Data)
 
 		fmt.Printf("Record %v\n", *r.SequenceNumber)
 	}
