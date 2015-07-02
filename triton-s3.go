@@ -2,14 +2,18 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/postmates/postal-go-triton/triton"
 )
+
+var LOG_INTERVAL = 10 * time.Second
 
 func main() {
 	fname := os.Getenv("TRITON_CONFIG")
@@ -20,6 +24,7 @@ func main() {
 
 	f, err := os.Open(fname)
 	if err != nil {
+
 		panic(err)
 	}
 
@@ -50,7 +55,16 @@ func main() {
 
 	defer st.Close()
 
+	logTime := time.Now()
+	recCount := 0
+
 	for {
+		if time.Since(logTime) >= LOG_INTERVAL {
+			log.Printf("Recorded %d records", recCount)
+			logTime = time.Now()
+			recCount = 0
+		}
+
 		r, err := s.Read()
 		if err != nil {
 			panic(err)
@@ -60,9 +74,10 @@ func main() {
 			panic("r is nil?")
 		}
 
+		recCount += 1
 		st.Put(r.Data)
 
-		fmt.Printf("Record %v\n", *r.SequenceNumber)
+		//fmt.Printf("Record %v\n", *r.SequenceNumber)
 		select {
 		case <-sigs:
 			st.Close()

@@ -25,6 +25,7 @@ func (s *Store) closeWriter() {
 	// TODO: Need to deal with this errors... we could have an out of disk
 	// space, for example.
 	if s.currentWriter != nil {
+		log.Println("Closing file", *s.currentFilename)
 		err := s.flushBuffer()
 		if err != nil {
 			panic(err)
@@ -38,12 +39,12 @@ func (s *Store) closeWriter() {
 		if s.uploader != nil {
 			err = s.uploader.Upload(*s.currentFilename)
 			if err != nil {
-				log.Panicf("Failed to upload %s", s.currentFilename)
+				log.Panicln("Failed to upload", s.currentFilename)
 			}
 
 			err = os.Remove(*s.currentFilename)
 			if err != nil {
-				log.Panicf("Failed to cleanup %s", s.currentFilename)
+				log.Panicln("Failed to cleanup", s.currentFilename)
 			}
 		}
 
@@ -56,6 +57,7 @@ func (s *Store) openWriter(fname string) (err error) {
 		return fmt.Errorf("Existing writer still open")
 	}
 
+	log.Println("Opening file", fname)
 	f, err := os.Create(fname)
 	if err != nil {
 		return err
@@ -96,6 +98,8 @@ func (s *Store) flushBuffer() (err error) {
 	if s.currentWriter == nil {
 		return fmt.Errorf("Flush without a current buffer")
 	}
+
+	log.Printf("Flushing updates for %s to disk\n", *s.currentFilename)
 
 	sw := snappy.NewWriter(s.currentWriter)
 	_, err = s.buf.WriteTo(sw)

@@ -18,6 +18,7 @@ type S3Uploader struct {
 }
 
 func (s *S3Uploader) Upload(fname string) (err error) {
+	// TODO: day path prefix
 	key := fname
 
 	r, err := os.Open(fname)
@@ -40,7 +41,7 @@ func (s *S3Uploader) Upload(fname string) (err error) {
 		}
 		return
 	} else {
-		log.Printf("Completed upload to %s\n", key)
+		log.Println("Completed upload to", key)
 	}
 	return
 }
