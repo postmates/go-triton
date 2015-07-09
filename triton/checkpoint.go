@@ -17,15 +17,8 @@ type Checkpointer struct {
 	db *sql.DB
 }
 
-const CREATE_TABLE = `
-CREATE TABLE IF NOT EXISTS triton_checkpoint (
-	client VARCHAR(255),
-	stream VARCHAR(255),
-	shard VARCHAR(255),
-	seq_num VARCHAR(255),
-	PRIMARY KEY (client, stream, shard))
-`
-
+// Stores the most recent sequence number seen by the stream.
+// This is a no-op if the stream hasn't seen any sequence numbers.
 func (c *Checkpointer) Checkpoint() (err error) {
 	if c.stream.LastSequenceNumber == nil {
 		log.Printf("Skipping checkpoint for %s-%s", c.stream.StreamName, c.stream.ShardID)
@@ -82,6 +75,7 @@ func (c *Checkpointer) Checkpoint() (err error) {
 	return
 }
 
+// Returns the most recently checkpointed sequence number
 func (c *Checkpointer) LastSequenceNumber() (seqNum string, err error) {
 	seqNum = ""
 
@@ -98,11 +92,22 @@ func (c *Checkpointer) LastSequenceNumber() (seqNum string, err error) {
 	return
 }
 
+const CREATE_TABLE_STMT = `
+CREATE TABLE IF NOT EXISTS triton_checkpoint (
+	client VARCHAR(255) NOT NULL,
+	stream VARCHAR(255) NOT NULL,
+	shard VARCHAR(255) NOT NULL,
+	seq_num VARCHAR(255) NOT NULL,
+	PRIMARY KEY (client, stream, shard))
+`
+
 func initDB(db *sql.DB) (err error) {
-	_, err = db.Exec(CREATE_TABLE)
+	_, err = db.Exec(CREATE_TABLE_STMT)
 	return
 }
 
+// Create a new Checkpointer.
+// May return an error if the database is not usable.
 func NewCheckpointer(clientName string, stream *Stream, db *sql.DB) (*Checkpointer, error) {
 	err := initDB(db)
 	if err != nil {
