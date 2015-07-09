@@ -4,10 +4,12 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-
-	"github.com/mattn/go-sqlite3"
 )
 
+// A checkpointer manages saving and loading savepoints for reading from a
+// Kinesis stream. It expects a reasonably compliant SQL database to read and write to.
+// On first use, it will attempt to create the table to store results in.
+// Checkpoints are unique based on client and (streamName, shardID)
 type Checkpointer struct {
 	clientName string
 	stream     *Stream
@@ -16,7 +18,7 @@ type Checkpointer struct {
 }
 
 const CREATE_TABLE = `
-CREATE TABLE triton_checkpoint (
+CREATE TABLE IF NOT EXISTS triton_checkpoint (
 	client VARCHAR(255),
 	stream VARCHAR(255),
 	shard VARCHAR(255),
@@ -96,36 +98,15 @@ func (c *Checkpointer) LastSequenceNumber() (seqNum string, err error) {
 	return
 }
 
-func checkDB(db *sql.DB) bool {
-	_, err := db.Exec("select 1 from triton_checkpoint")
-	// TODO: pgsql
-
-	if sErr, ok := err.(sqlite3.Error); ok { // Now the error number is accessible directly
-		if sErr.Code == sqlite3.ErrError {
-			return false
-		}
-
-		panic(err)
-	}
-
-	return true
-}
-
 func initDB(db *sql.DB) (err error) {
 	_, err = db.Exec(CREATE_TABLE)
 	return
 }
 
-func NewCheckpointer(clientName string, stream *Stream, db *sql.DB) *Checkpointer {
-	if !checkDB(db) {
-		err := initDB(db)
-		if err != nil {
-			panic(err)
-		}
-
-		if !checkDB(db) {
-			panic(fmt.Errorf("Failed with db"))
-		}
+func NewCheckpointer(clientName string, stream *Stream, db *sql.DB) (*Checkpointer, error) {
+	err := initDB(db)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to initialize db: %v", err)
 	}
 
 	c := Checkpointer{
@@ -134,5 +115,5 @@ func NewCheckpointer(clientName string, stream *Stream, db *sql.DB) *Checkpointe
 		db:         db,
 	}
 
-	return &c
+	return &c, nil
 }

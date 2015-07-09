@@ -34,7 +34,11 @@ func TestNewCheckpointer(t *testing.T) {
 	ksvc := NullKinesisService{}
 	s := NewStream(&ksvc, streamName, shardID)
 
-	c := NewCheckpointer("test", s, db)
+	c, err := NewCheckpointer("test", s, db)
+	if err != nil {
+		t.Errorf("Failed to create: %v", err)
+		return
+	}
 
 	if c == nil {
 		t.Errorf("Failed to create")
@@ -55,7 +59,7 @@ func TestCheckpoint(t *testing.T) {
 	ksvc := NullKinesisService{}
 	s := NewStream(&ksvc, streamName, shardID)
 
-	c := NewCheckpointer("test", s, db)
+	c, _ := NewCheckpointer("test", s, db)
 
 	s.LastSequenceNumber = aws.String("1234")
 
@@ -86,7 +90,7 @@ func TestCheckpointUpdate(t *testing.T) {
 	ksvc := NullKinesisService{}
 	s := NewStream(&ksvc, streamName, shardID)
 
-	c := NewCheckpointer("test", s, db)
+	c, _ := NewCheckpointer("test", s, db)
 
 	s.LastSequenceNumber = aws.String("1234")
 
@@ -125,7 +129,7 @@ func TestEmptyCheckpoint(t *testing.T) {
 	ksvc := NullKinesisService{}
 	s := NewStream(&ksvc, streamName, shardID)
 
-	c := NewCheckpointer("test", s, db)
+	c, _ := NewCheckpointer("test", s, db)
 
 	err := c.Checkpoint()
 	if err != nil {
@@ -142,7 +146,7 @@ func TestEmptyLastSequenceNumber(t *testing.T) {
 	ksvc := NullKinesisService{}
 	s := NewStream(&ksvc, streamName, shardID)
 
-	c := NewCheckpointer("test", s, db)
+	c, _ := NewCheckpointer("test", s, db)
 
 	seq, err := c.LastSequenceNumber()
 	if err != nil {
