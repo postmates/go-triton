@@ -31,6 +31,10 @@ func (s *Stream) initIterator() (err error) {
 		ShardIteratorType: aws.String(s.ShardIteratorType),
 	}
 
+	if s.LastSequenceNumber != nil {
+		gsi.StartingSequenceNumber = s.LastSequenceNumber
+	}
+
 	gso, err := s.service.GetShardIterator(&gsi)
 	if err != nil {
 		return err
@@ -116,27 +120,23 @@ func NewStream(svc KinesisService, streamName string, shardId string) (s *Stream
 	return s
 }
 
-func OpenStream(sc *StreamConfig, shardNum int) (s *Stream, err error) {
-	svc := kinesis.New(&aws.Config{Region: sc.RegionName})
-
-	resp, err := svc.DescribeStream(&kinesis.DescribeStreamInput{StreamName: aws.String(sc.StreamName)})
+func PickShardID(svc KinesisService, streamName string, shardNum int) (shardID string, err error) {
+	resp, err := svc.DescribeStream(&kinesis.DescribeStreamInput{StreamName: aws.String(streamName)})
 	if err != nil {
 		if awsErr, ok := err.(awserr.Error); ok {
 			if awsErr.Code() == "ResourceNotFoundException" {
-				return nil, fmt.Errorf("Failed to find stream %v", awsErr.Message())
+				return "", fmt.Errorf("Failed to find stream %v", awsErr.Message())
 			}
 		}
-		return nil, err
+
+		return
 	}
 
 	if len(resp.StreamDescription.Shards) < shardNum {
 		err = fmt.Errorf("Stream doesn't have a shard %d", shardNum)
-		return nil, err
+		return
 	}
 
-	shardID := *resp.StreamDescription.Shards[shardNum].ShardID
-
-	s = NewStream(svc, sc.StreamName, shardID)
-
-	return s, nil
+	shardID = *resp.StreamDescription.Shards[shardNum].ShardID
+	return
 }

@@ -12,19 +12,14 @@ import (
 // Checkpoints are unique based on client and (streamName, shardID)
 type Checkpointer struct {
 	clientName string
-	stream     *Stream
+	streamName string
+	shardID    string
 
 	db *sql.DB
 }
 
-// Stores the most recent sequence number seen by the stream.
-// This is a no-op if the stream hasn't seen any sequence numbers.
-func (c *Checkpointer) Checkpoint() (err error) {
-	if c.stream.LastSequenceNumber == nil {
-		log.Printf("Skipping checkpoint for %s-%s", c.stream.StreamName, c.stream.ShardID)
-		return
-	}
-
+// Stores the provided recent sequence number
+func (c *Checkpointer) Checkpoint(sequenceNumber string) (err error) {
 	txn, err := c.db.Begin()
 	if err != nil {
 		return err
@@ -32,7 +27,7 @@ func (c *Checkpointer) Checkpoint() (err error) {
 
 	rows, err := txn.Query(
 		"SELECT 1 FROM triton_checkpoint WHERE client=$1 AND stream=$2 AND shard=$3",
-		c.clientName, c.stream.StreamName, c.stream.ShardID)
+		c.clientName, c.streamName, c.shardID)
 	if err != nil {
 		txn.Rollback()
 		return err
@@ -42,10 +37,10 @@ func (c *Checkpointer) Checkpoint() (err error) {
 
 	if rows.Next() {
 		log.Printf("Updating checkpoint for %s-%s: %s",
-			c.stream.StreamName, c.stream.ShardID, *c.stream.LastSequenceNumber)
+			c.streamName, c.shardID, sequenceNumber)
 		res, err := txn.Exec(
 			"UPDATE triton_checkpoint SET seq_num=$1 WHERE client=$2 AND stream=$3 AND shard=$4",
-			c.stream.LastSequenceNumber, c.clientName, c.stream.StreamName, c.stream.ShardID)
+			sequenceNumber, c.clientName, c.streamName, c.shardID)
 		if err != nil {
 			txn.Rollback()
 			return err
@@ -59,10 +54,10 @@ func (c *Checkpointer) Checkpoint() (err error) {
 
 	} else {
 		log.Printf("Creating checkpoint for %s-%s: %s",
-			c.stream.StreamName, c.stream.ShardID, *c.stream.LastSequenceNumber)
+			c.streamName, c.shardID, sequenceNumber)
 		_, err := txn.Exec(
 			"INSERT INTO triton_checkpoint VALUES ($1, $2, $3, $4)",
-			c.clientName, c.stream.StreamName, c.stream.ShardID, c.stream.LastSequenceNumber)
+			c.clientName, c.streamName, c.shardID, sequenceNumber)
 
 		if err != nil {
 			txn.Rollback()
@@ -80,7 +75,7 @@ func (c *Checkpointer) LastSequenceNumber() (seqNum string, err error) {
 	seqNum = ""
 
 	err = c.db.QueryRow("SELECT seq_num FROM triton_checkpoint WHERE client=$1 AND stream=$2 AND shard=$3",
-		c.clientName, c.stream.StreamName, c.stream.ShardID).Scan(&seqNum)
+		c.clientName, c.streamName, c.shardID).Scan(&seqNum)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return "", nil
@@ -108,7 +103,7 @@ func initDB(db *sql.DB) (err error) {
 
 // Create a new Checkpointer.
 // May return an error if the database is not usable.
-func NewCheckpointer(clientName string, stream *Stream, db *sql.DB) (*Checkpointer, error) {
+func NewCheckpointer(clientName string, streamName string, shardID string, db *sql.DB) (*Checkpointer, error) {
 	err := initDB(db)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to initialize db: %v", err)
@@ -116,7 +111,8 @@ func NewCheckpointer(clientName string, stream *Stream, db *sql.DB) (*Checkpoint
 
 	c := Checkpointer{
 		clientName: clientName,
-		stream:     stream,
+		streamName: streamName,
+		shardID:    shardID,
 		db:         db,
 	}
 

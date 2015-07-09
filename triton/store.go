@@ -8,15 +8,23 @@ import (
 	"os"
 	"time"
 
+	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/golang/snappy/snappy"
 )
 
+type CheckpointService interface {
+	Checkpoint(string) error
+}
+
 type Store struct {
-	streamName      string
-	shard           string
-	uploader        *S3Uploader
-	currentWriter   io.WriteCloser
-	currentFilename *string
+	streamName   string
+	shardID      string
+	uploader     *S3Uploader
+	checkpointer CheckpointService
+
+	currentWriter      io.WriteCloser
+	currentFilename    *string
+	lastSequenceNumber string
 
 	buf *bytes.Buffer
 }
@@ -42,6 +50,15 @@ func (s *Store) closeWriter() {
 				log.Panicln("Failed to upload", s.currentFilename)
 			}
 
+			// Now that we've successfully uploaded the data, we can checkpoint
+			// this write.
+			if s.checkpointer != nil {
+				err = s.checkpointer.Checkpoint(s.lastSequenceNumber)
+				if err != nil {
+					log.Panicln("Failed to checkpoint", err)
+				}
+			}
+
 			err = os.Remove(*s.currentFilename)
 			if err != nil {
 				log.Panicln("Failed to cleanup", s.currentFilename)
@@ -49,6 +66,7 @@ func (s *Store) closeWriter() {
 		}
 
 		s.currentWriter = nil
+		s.lastSequenceNumber = ""
 	}
 }
 
@@ -71,7 +89,7 @@ func (s *Store) openWriter(fname string) (err error) {
 
 func (s *Store) generateFilename(t time.Time) (fname string) {
 	ds := t.Format("2006010215")
-	fname = fmt.Sprintf("%s-%s-%s.tri", s.streamName, s.shard, ds)
+	fname = fmt.Sprintf("%s-%s-%s.tri", s.streamName, s.shardID, ds)
 
 	return
 }
@@ -128,6 +146,14 @@ func (s *Store) Put(b []byte) (err error) {
 	return
 }
 
+func (s *Store) PutRecord(r *kinesis.Record) (err error) {
+	err = s.Put(r.Data)
+	if err == nil {
+		s.lastSequenceNumber = *r.SequenceNumber
+	}
+	return
+}
+
 func (s *Store) Close() (err error) {
 	s.closeWriter()
 	return nil
@@ -135,15 +161,16 @@ func (s *Store) Close() (err error) {
 
 const BUFFER_SIZE int = 1024 * 1024
 
-func NewStore(sc *StreamConfig, shard string, up *S3Uploader) (s *Store) {
+func NewStore(streamName, shardID string, up *S3Uploader, checkpointer CheckpointService) (s *Store) {
 	b := make([]byte, 0, BUFFER_SIZE)
 	buf := bytes.NewBuffer(b)
 
 	s = &Store{
-		streamName: sc.StreamName,
-		shard:      shard,
-		buf:        buf,
-		uploader:   up,
+		streamName:   streamName,
+		shardID:      shardID,
+		buf:          buf,
+		uploader:     up,
+		checkpointer: checkpointer,
 	}
 
 	return

@@ -1,6 +1,7 @@
 package triton
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -24,6 +25,10 @@ func (s *NullKinesisService) GetRecords(*kinesis.GetRecordsInput) (*kinesis.GetR
 		Records:            records,
 	}
 	return gso, nil
+}
+
+func (s *NullKinesisService) DescribeStream(input *kinesis.DescribeStreamInput) (*kinesis.DescribeStreamOutput, error) {
+	return nil, fmt.Errorf("Not Implemented")
 }
 
 func TestNewStream(t *testing.T) {

@@ -5,7 +5,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -31,10 +30,7 @@ func TestNewCheckpointer(t *testing.T) {
 
 	streamName := "test-stream"
 	shardID := "shard-0000"
-	ksvc := NullKinesisService{}
-	s := NewStream(&ksvc, streamName, shardID)
-
-	c, err := NewCheckpointer("test", s, db)
+	c, err := NewCheckpointer("test", streamName, shardID, db)
 	if err != nil {
 		t.Errorf("Failed to create: %v", err)
 		return
@@ -48,22 +44,23 @@ func TestNewCheckpointer(t *testing.T) {
 	if c.clientName != "test" {
 		t.Errorf("Name mismatch")
 	}
+
+	if c.streamName != streamName {
+		t.Errorf("streamName mismatch")
+	}
+
+	if c.shardID != shardID {
+		t.Errorf("shardID mismatch")
+	}
 }
 
 func TestCheckpoint(t *testing.T) {
 	db := openTestDB()
 	defer closeTestDB(db)
 
-	streamName := "test-stream"
-	shardID := "shard-0000"
-	ksvc := NullKinesisService{}
-	s := NewStream(&ksvc, streamName, shardID)
+	c, _ := NewCheckpointer("test", "test-stream", "shard-000", db)
 
-	c, _ := NewCheckpointer("test", s, db)
-
-	s.LastSequenceNumber = aws.String("1234")
-
-	err := c.Checkpoint()
+	err := c.Checkpoint("1234")
 	if err != nil {
 		t.Errorf("Failed to checkpoint: %v", err)
 		return
@@ -85,24 +82,15 @@ func TestCheckpointUpdate(t *testing.T) {
 	db := openTestDB()
 	defer closeTestDB(db)
 
-	streamName := "test-stream"
-	shardID := "shard-0000"
-	ksvc := NullKinesisService{}
-	s := NewStream(&ksvc, streamName, shardID)
+	c, _ := NewCheckpointer("test", "test-stream", "shard-000", db)
 
-	c, _ := NewCheckpointer("test", s, db)
-
-	s.LastSequenceNumber = aws.String("1234")
-
-	err := c.Checkpoint()
+	err := c.Checkpoint("1234")
 	if err != nil {
 		t.Errorf("Failed to checkpoint: %v", err)
 		return
 	}
 
-	s.LastSequenceNumber = aws.String("51234")
-
-	err = c.Checkpoint()
+	err = c.Checkpoint("51234")
 	if err != nil {
 		t.Errorf("Failed to checkpoint: %v", err)
 		return
@@ -120,33 +108,11 @@ func TestCheckpointUpdate(t *testing.T) {
 	}
 }
 
-func TestEmptyCheckpoint(t *testing.T) {
-	db := openTestDB()
-	defer closeTestDB(db)
-
-	streamName := "test-stream"
-	shardID := "shard-0000"
-	ksvc := NullKinesisService{}
-	s := NewStream(&ksvc, streamName, shardID)
-
-	c, _ := NewCheckpointer("test", s, db)
-
-	err := c.Checkpoint()
-	if err != nil {
-		t.Errorf("Failed to set empty checkpoint")
-	}
-}
-
 func TestEmptyLastSequenceNumber(t *testing.T) {
 	db := openTestDB()
 	defer closeTestDB(db)
 
-	streamName := "test-stream"
-	shardID := "shard-0000"
-	ksvc := NullKinesisService{}
-	s := NewStream(&ksvc, streamName, shardID)
-
-	c, _ := NewCheckpointer("test", s, db)
+	c, _ := NewCheckpointer("test", "test-stream", "shard-000", db)
 
 	seq, err := c.LastSequenceNumber()
 	if err != nil {
