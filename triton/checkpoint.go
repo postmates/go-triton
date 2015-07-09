@@ -3,6 +3,7 @@ package triton
 import (
 	"database/sql"
 	"fmt"
+	"log"
 
 	"github.com/mattn/go-sqlite3"
 )
@@ -24,6 +25,11 @@ CREATE TABLE triton_checkpoint (
 `
 
 func (c *Checkpointer) Checkpoint() (err error) {
+	if c.stream.LastSequenceNumber == nil {
+		log.Printf("Skipping checkpoint for %s-%s", c.stream.StreamName, c.stream.ShardID)
+		return
+	}
+
 	txn, err := c.db.Begin()
 	if err != nil {
 		return err
@@ -40,10 +46,11 @@ func (c *Checkpointer) Checkpoint() (err error) {
 	defer rows.Close()
 
 	if rows.Next() {
-		fmt.Println("Do UPDATE")
+		log.Printf("Updating checkpoint for %s-%s: %s",
+			c.stream.StreamName, c.stream.ShardID, *c.stream.LastSequenceNumber)
 		res, err := txn.Exec(
-			"UPDATE triton_checkpoint VALUES seq_num=$4 WHERE client=$1 AND stream=$2 AND shard=$3",
-			c.clientName, c.stream.StreamName, c.stream.ShardID, c.stream.LastSequenceNumber)
+			"UPDATE triton_checkpoint SET seq_num=$1 WHERE client=$2 AND stream=$3 AND shard=$4",
+			c.stream.LastSequenceNumber, c.clientName, c.stream.StreamName, c.stream.ShardID)
 		if err != nil {
 			txn.Rollback()
 			return err
@@ -56,7 +63,8 @@ func (c *Checkpointer) Checkpoint() (err error) {
 		}
 
 	} else {
-		fmt.Println("Do INSERT")
+		log.Printf("Creating checkpoint for %s-%s: %s",
+			c.stream.StreamName, c.stream.ShardID, *c.stream.LastSequenceNumber)
 		_, err := txn.Exec(
 			"INSERT INTO triton_checkpoint VALUES ($1, $2, $3, $4)",
 			c.clientName, c.stream.StreamName, c.stream.ShardID, c.stream.LastSequenceNumber)
@@ -68,6 +76,22 @@ func (c *Checkpointer) Checkpoint() (err error) {
 	}
 
 	err = txn.Commit()
+
+	return
+}
+
+func (c *Checkpointer) LastSequenceNumber() (seqNum string, err error) {
+	seqNum = ""
+
+	err = c.db.QueryRow("SELECT seq_num FROM triton_checkpoint WHERE client=$1 AND stream=$2 AND shard=$3",
+		c.clientName, c.stream.StreamName, c.stream.ShardID).Scan(&seqNum)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", nil
+		} else {
+			return
+		}
+	}
 
 	return
 }

@@ -62,5 +62,94 @@ func TestCheckpoint(t *testing.T) {
 	err := c.Checkpoint()
 	if err != nil {
 		t.Errorf("Failed to checkpoint: %v", err)
+		return
+	}
+
+	seqNum, err := c.LastSequenceNumber()
+	if err != nil {
+		t.Errorf("Failed to load sequence number")
+		return
+	}
+
+	if seqNum != "1234" {
+		t.Errorf("Sequence number mismatch: %v", seqNum)
+		return
+	}
+}
+
+func TestCheckpointUpdate(t *testing.T) {
+	db := openTestDB()
+	defer closeTestDB(db)
+
+	streamName := "test-stream"
+	shardID := "shard-0000"
+	ksvc := NullKinesisService{}
+	s := NewStream(&ksvc, streamName, shardID)
+
+	c := NewCheckpointer("test", s, db)
+
+	s.LastSequenceNumber = aws.String("1234")
+
+	err := c.Checkpoint()
+	if err != nil {
+		t.Errorf("Failed to checkpoint: %v", err)
+		return
+	}
+
+	s.LastSequenceNumber = aws.String("51234")
+
+	err = c.Checkpoint()
+	if err != nil {
+		t.Errorf("Failed to checkpoint: %v", err)
+		return
+	}
+
+	seqNum, err := c.LastSequenceNumber()
+	if err != nil {
+		t.Errorf("Failed to load sequence number")
+		return
+	}
+
+	if seqNum != "51234" {
+		t.Errorf("Sequence number mismatch: %v", seqNum)
+		return
+	}
+}
+
+func TestEmptyCheckpoint(t *testing.T) {
+	db := openTestDB()
+	defer closeTestDB(db)
+
+	streamName := "test-stream"
+	shardID := "shard-0000"
+	ksvc := NullKinesisService{}
+	s := NewStream(&ksvc, streamName, shardID)
+
+	c := NewCheckpointer("test", s, db)
+
+	err := c.Checkpoint()
+	if err != nil {
+		t.Errorf("Failed to set empty checkpoint")
+	}
+}
+
+func TestEmptyLastSequenceNumber(t *testing.T) {
+	db := openTestDB()
+	defer closeTestDB(db)
+
+	streamName := "test-stream"
+	shardID := "shard-0000"
+	ksvc := NullKinesisService{}
+	s := NewStream(&ksvc, streamName, shardID)
+
+	c := NewCheckpointer("test", s, db)
+
+	seq, err := c.LastSequenceNumber()
+	if err != nil {
+		t.Errorf("Failed to get empty checkpoint")
+	}
+
+	if seq != "" {
+		t.Errorf("Should have received empty seq")
 	}
 }
