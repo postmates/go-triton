@@ -22,6 +22,7 @@ type Store struct {
 	uploader     *S3Uploader
 	checkpointer CheckpointService
 
+	currentLogTime     time.Time
 	currentWriter      io.WriteCloser
 	currentFilename    *string
 	lastSequenceNumber string
@@ -29,45 +30,54 @@ type Store struct {
 	buf *bytes.Buffer
 }
 
-func (s *Store) closeWriter() {
-	// TODO: Need to deal with this errors... we could have an out of disk
-	// space, for example.
+func (s *Store) closeWriter() error {
 	if s.currentWriter != nil {
 		log.Println("Closing file", *s.currentFilename)
 		err := s.flushBuffer()
 		if err != nil {
-			panic(err)
+			log.Println("Failed to flush", err)
+			return fmt.Errorf("Failed to close writer")
 		}
 
 		err = s.currentWriter.Close()
 		if err != nil {
-			panic(err)
+			log.Println("Failed to close", err)
+			return fmt.Errorf("Failed to close writer")
 		}
+		s.currentWriter = nil
 
 		if s.uploader != nil {
-			err = s.uploader.Upload(*s.currentFilename)
+			err = s.uploader.Upload(*s.currentFilename, s.generateKeyname())
 			if err != nil {
-				log.Panicln("Failed to upload", s.currentFilename)
-			}
-
-			// Now that we've successfully uploaded the data, we can checkpoint
-			// this write.
-			if s.checkpointer != nil {
-				err = s.checkpointer.Checkpoint(s.lastSequenceNumber)
-				if err != nil {
-					log.Panicln("Failed to checkpoint", err)
-				}
+				log.Println("Failed to upload:", err)
+				return fmt.Errorf("Failed to upload")
 			}
 
 			err = os.Remove(*s.currentFilename)
 			if err != nil {
-				log.Panicln("Failed to cleanup", s.currentFilename)
+				log.Println("Failed to cleanup:", err)
+				return fmt.Errorf("Failed to cleanup writer")
 			}
 		}
 
-		s.currentWriter = nil
+		// Now that we've successfully uploaded the data, we can checkpoint
+		// this write.
+		if s.checkpointer != nil {
+			if len(s.lastSequenceNumber) > 0 {
+				err = s.checkpointer.Checkpoint(s.lastSequenceNumber)
+				if err != nil {
+					log.Println("Failed to checkpoint:", err)
+					return fmt.Errorf("Failed to checkpoint store")
+				}
+			} else {
+				log.Println("Empty checkpoint")
+			}
+		}
+
 		s.lastSequenceNumber = ""
 	}
+
+	return nil
 }
 
 func (s *Store) openWriter(fname string) (err error) {
@@ -83,26 +93,39 @@ func (s *Store) openWriter(fname string) (err error) {
 
 	s.currentFilename = &fname
 	s.currentWriter = f
+	s.currentLogTime = time.Now()
 
 	return
 }
 
-func (s *Store) generateFilename(t time.Time) (fname string) {
-	ds := t.Format("2006010215")
-	fname = fmt.Sprintf("%s-%s-%s.tri", s.streamName, s.shardID, ds)
+func (s *Store) generateFilename() (name string) {
+	name = fmt.Sprintf("%s-%s.tri", s.streamName, s.shardID)
+
+	return
+}
+
+func (s *Store) generateKeyname() (name string) {
+	day_s := s.currentLogTime.Format("20060102")
+	ts_s := fmt.Sprintf("%d", s.currentLogTime.Unix())
+
+	name = fmt.Sprintf("%s/%s-%s-%s.tri", day_s, s.streamName, s.shardID, ts_s)
 
 	return
 }
 
 func (s *Store) getCurrentWriter() (w io.Writer, err error) {
-	fn := s.generateFilename(time.Now())
-
-	if s.currentFilename != nil && *s.currentFilename != fn {
-		s.closeWriter()
+	if s.currentWriter != nil {
+		// Rotate by the hour
+		if s.currentLogTime.Hour() != time.Now().Hour() {
+			err = s.closeWriter()
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	if s.currentWriter == nil {
-		err := s.openWriter(fn)
+		err := s.openWriter(s.generateFilename())
 		if err != nil {
 			return nil, err
 		}
@@ -155,8 +178,8 @@ func (s *Store) PutRecord(r *kinesis.Record) (err error) {
 }
 
 func (s *Store) Close() (err error) {
-	s.closeWriter()
-	return nil
+	err = s.closeWriter()
+	return
 }
 
 const BUFFER_SIZE int = 1024 * 1024

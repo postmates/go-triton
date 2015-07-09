@@ -19,10 +19,19 @@ func TestNewStore(t *testing.T) {
 func TestGenerateFilename(t *testing.T) {
 	s := NewStore("test_stream", "0001", nil, nil)
 
-	n := time.Date(2015, 6, 30, 2, 45, 0, 0, time.UTC)
-	fname := s.generateFilename(n)
-	if fname != "test_stream-0001-2015063002.tri" {
+	fname := s.generateFilename()
+	if fname != "test_stream-0001.tri" {
 		t.Errorf("Bad file file %v", fname)
+	}
+}
+
+func TestGenerateKeyname(t *testing.T) {
+	s := NewStore("test_stream", "0001", nil, nil)
+
+	s.currentLogTime = time.Date(2015, 6, 30, 2, 45, 0, 0, time.UTC)
+	name := s.generateKeyname()
+	if name != "20150630/test_stream-0001-1435632300.tri" {
+		t.Errorf("Bad file file %v", name)
 	}
 }
 

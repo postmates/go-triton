@@ -17,31 +17,27 @@ type S3Uploader struct {
 	bucketName string
 }
 
-func (s *S3Uploader) Upload(fname string) (err error) {
-	// TODO: day path prefix
-	key := fname
-
-	r, err := os.Open(fname)
+func (s *S3Uploader) Upload(fileName, keyName string) (err error) {
+	r, err := os.Open(fileName)
 	if err != nil {
 		return
 	}
 
-	log.Printf("Uploading %s\n", fname)
+	log.Println("Uploading", fileName)
 	ui := s3manager.UploadInput{
 		Bucket: aws.String(s.bucketName),
-		Key:    aws.String(key),
+		Key:    aws.String(keyName),
 		Body:   r,
 	}
 
 	_, err = s.uploader.Upload(&ui)
 	if err != nil {
-		log.Println("Failed to upload")
 		if awsErr, ok := err.(awserr.Error); ok {
 			return fmt.Errorf("Failed to upload: %v (%v)", awsErr.Code(), awsErr.Message())
 		}
 		return
 	} else {
-		log.Println("Completed upload to", key)
+		log.Println("Completed upload to", keyName)
 	}
 	return
 }

@@ -75,8 +75,10 @@ func main() {
 
 	var stream *triton.Stream
 	if len(seqNum) > 0 {
+		log.Printf("Opening stream %s-%s at %s", sc.StreamName, shardID, seqNum)
 		stream = triton.NewStreamFromSequence(ksvc, sc.StreamName, shardID, seqNum)
 	} else {
+		log.Printf("Opening stream %s-%s at LATEST", sc.StreamName, shardID)
 		stream = triton.NewStream(ksvc, sc.StreamName, shardID)
 	}
 
@@ -99,7 +101,7 @@ func main() {
 
 		r, err := stream.Read()
 		if err != nil {
-			panic(err)
+			log.Fatalln("Failed to read from stream:", err)
 		}
 
 		if r == nil {
@@ -107,9 +109,11 @@ func main() {
 		}
 
 		recCount += 1
-		st.PutRecord(r)
+		err = st.PutRecord(r)
+		if err != nil {
+			log.Fatalln("Failed to put record:", err)
+		}
 
-		//fmt.Printf("Record %v\n", *r.SequenceNumber)
 		select {
 		case <-sigs:
 			st.Close()
