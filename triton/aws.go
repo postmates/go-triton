@@ -6,6 +6,9 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
+// These 'Services' are just shims to allow for easier testing.  They also give
+// us an idea of the minimum functionality we're using from our APIs.
+
 type KinesisService interface {
 	DescribeStream(*kinesis.DescribeStreamInput) (*kinesis.DescribeStreamOutput, error)
 	GetShardIterator(*kinesis.GetShardIteratorInput) (*kinesis.GetShardIteratorOutput, error)

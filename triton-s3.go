@@ -42,6 +42,7 @@ func openStreamConfig(streamName string) *triton.StreamConfig {
 }
 
 func openDB() *sql.DB {
+	// TODO: pgsql option
 	db, err := sql.Open("sqlite3", "triton-s3.db")
 	if err != nil {
 		log.Fatalln("Failed to open db", err)
@@ -50,6 +51,8 @@ func openDB() *sql.DB {
 	return db
 }
 
+// Loop on records read from the stream, send it to the store.
+// Provided signal channel will tell us when to quit.
 func loopStream(stream *triton.Stream, store *triton.Store, sigs chan os.Signal) {
 	logTime := time.Now()
 	recCount := 0

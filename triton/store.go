@@ -16,10 +16,15 @@ type CheckpointService interface {
 	Checkpoint(string) error
 }
 
+// A store manages buffering records together into files, and uploading them somewhere.
 type Store struct {
-	streamName   string
-	shardID      string
-	uploader     *S3Uploader
+	streamName string
+	shardID    string
+
+	// Our uploaders manages sending our datafiles somewhere
+	uploader *S3Uploader
+
+	// A Checkpointer stores what records have be committed to our uploader
 	checkpointer CheckpointService
 
 	currentLogTime     time.Time
