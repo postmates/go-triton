@@ -50,6 +50,44 @@ func openDB() *sql.DB {
 	return db
 }
 
+func loopStream(stream *triton.Stream, store *triton.Store, sigs chan os.Signal) {
+	logTime := time.Now()
+	recCount := 0
+
+	for {
+		if time.Since(logTime) >= LOG_INTERVAL {
+			log.Printf("Recorded %d records", recCount)
+			logTime = time.Now()
+			recCount = 0
+		}
+
+		r, err := stream.Read()
+		if err != nil {
+			log.Fatalln("Failed to read from stream:", err)
+		}
+
+		if r == nil {
+			panic("r is nil?")
+		}
+
+		recCount += 1
+		err = store.PutRecord(r)
+		if err != nil {
+			log.Fatalln("Failed to put record:", err)
+		}
+
+		select {
+		case <-sigs:
+			// The caller is probably closing too, but just to make sure our
+			// graceful exit looks really graceful, do it here.
+			store.Close()
+			return
+		default:
+			continue
+		}
+	}
+}
+
 func main() {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
@@ -86,40 +124,9 @@ func main() {
 	s3_svc := s3.New(&aws.Config{Region: sc.RegionName})
 	u := triton.NewUploader(s3_svc, bucketName)
 
-	st := triton.NewStore(sc.StreamName, shardID, u, c)
-	defer st.Close()
+	store := triton.NewStore(sc.StreamName, shardID, u, c)
+	defer store.Close()
 
-	logTime := time.Now()
-	recCount := 0
-
-	for {
-		if time.Since(logTime) >= LOG_INTERVAL {
-			log.Printf("Recorded %d records", recCount)
-			logTime = time.Now()
-			recCount = 0
-		}
-
-		r, err := stream.Read()
-		if err != nil {
-			log.Fatalln("Failed to read from stream:", err)
-		}
-
-		if r == nil {
-			panic("r is nil?")
-		}
-
-		recCount += 1
-		err = st.PutRecord(r)
-		if err != nil {
-			log.Fatalln("Failed to put record:", err)
-		}
-
-		select {
-		case <-sigs:
-			st.Close()
-			os.Exit(0)
-		default:
-			continue
-		}
-	}
+	loopStream(stream, store, sigs)
+	log.Println("Done")
 }
