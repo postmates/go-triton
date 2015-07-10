@@ -96,7 +96,7 @@ func loopStream(stream *triton.Stream, store *triton.Store, quit chan bool) {
 	}
 }
 
-func setupStoreAndStream(sc *triton.StreamConfig, shardID string, bucketName string, db *sql.DB) (stream *triton.Stream, store *triton.Store) {
+func setupStoreAndStream(sc *triton.StreamConfig, shardID string, bucketName string, skipToLatest bool, db *sql.DB) (stream *triton.Stream, store *triton.Store) {
 	ksvc := kinesis.New(&aws.Config{Region: sc.RegionName})
 
 	c, err := triton.NewCheckpointer("triton-store", sc.StreamName, shardID, db)
@@ -109,7 +109,7 @@ func setupStoreAndStream(sc *triton.StreamConfig, shardID string, bucketName str
 		log.Fatalln("Failed to load last sequence number", err)
 	}
 
-	if len(seqNum) > 0 {
+	if !skipToLatest && len(seqNum) > 0 {
 		log.Printf("Opening stream %s-%s at %s", sc.StreamName, shardID, seqNum)
 		stream = triton.NewStreamFromSequence(ksvc, sc.StreamName, shardID, seqNum)
 	} else {
@@ -130,7 +130,7 @@ func setupStoreAndStream(sc *triton.StreamConfig, shardID string, bucketName str
 // NOTE: for now we're planning on having a single process handle all our
 // shards.  In the future, as this thing scales, it will probably be convinient
 // to have command line arguments to indicate which shards we should process.
-func store(streamName, bucketName string) {
+func store(streamName, bucketName string, skipToLatest bool) {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
@@ -155,7 +155,7 @@ func store(streamName, bucketName string) {
 		quitChan := make(chan bool, 1)
 		quitChans = append(quitChans, quitChan)
 
-		stream, store := setupStoreAndStream(sc, shardID, bucketName, db)
+		stream, store := setupStoreAndStream(sc, shardID, bucketName, skipToLatest, db)
 
 		wg.Add(1)
 
@@ -236,7 +236,12 @@ func main() {
 					Name:   "bucket",
 					Usage:  "Destination S3 bucket",
 					EnvVar: "TRITON_BUCKET",
-				}},
+				},
+				cli.BoolFlag{
+					Name:  "skip-to-latest",
+					Usage: "Skip to latest in stream (ignoring previous checkpoints)",
+				},
+			},
 			Action: func(c *cli.Context) {
 				if c.String("bucket") == "" {
 					fmt.Fprintln(os.Stderr, "bucket name required")
@@ -250,7 +255,7 @@ func main() {
 					os.Exit(1)
 				}
 
-				store(c.String("stream"), c.String("bucket"))
+				store(c.String("stream"), c.String("bucket"), c.Bool("skip-to-latest"))
 			},
 		},
 		{
