@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -11,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/codegangsta/cli"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/postmates/postal-go-triton/triton"
 )
@@ -91,20 +93,20 @@ func loopStream(stream *triton.Stream, store *triton.Store, sigs chan os.Signal)
 	}
 }
 
-func main() {
+func store(streamName, bucketName string, shardNum int) {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
-	sc := openStreamConfig("courier_activity")
+	sc := openStreamConfig(streamName)
 
 	ksvc := kinesis.New(&aws.Config{Region: sc.RegionName})
 
-	shardID, err := triton.PickShardID(ksvc, sc.StreamName, 0)
+	shardID, err := triton.PickShardID(ksvc, sc.StreamName, shardNum)
 
 	db := openDB()
 	defer db.Close()
 
-	c, err := triton.NewCheckpointer("triton-s3", sc.StreamName, shardID, db)
+	c, err := triton.NewCheckpointer("triton-store", sc.StreamName, shardID, db)
 	if err != nil {
 		log.Fatalln("Failed to open Checkpointer", err)
 	}
@@ -123,7 +125,6 @@ func main() {
 		stream = triton.NewStream(ksvc, sc.StreamName, shardID)
 	}
 
-	bucketName := "postal-triton-dev"
 	s3_svc := s3.New(&aws.Config{Region: sc.RegionName})
 	u := triton.NewUploader(s3_svc, bucketName)
 
@@ -132,4 +133,82 @@ func main() {
 
 	loopStream(stream, store, sigs)
 	log.Println("Done")
+}
+
+func listShards(streamName string) {
+	sc := openStreamConfig(streamName)
+	ksvc := kinesis.New(&aws.Config{Region: sc.RegionName})
+
+	shards, err := triton.ListShards(ksvc, sc.StreamName)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error listing shards", err)
+		os.Exit(1)
+	}
+
+	for _, st := range shards {
+		fmt.Println(st)
+	}
+}
+
+func main() {
+	app := cli.NewApp()
+	app.Name = "triton"
+	app.Usage = "Utilities for the Triton Data Pipeline"
+	app.Version = "0.0.1"
+	app.Commands = []cli.Command{
+		{
+			Name:    "store",
+			Aliases: []string{"s"},
+			Usage:   "store triton data to s3",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "stream",
+					Usage: "Named triton stream",
+				},
+				cli.IntFlag{
+					Name:  "shard",
+					Usage: "Shard number",
+				},
+				cli.StringFlag{
+					Name:   "bucket",
+					Usage:  "Destination S3 bucket",
+					EnvVar: "TRITON_BUCKET",
+				}},
+			Action: func(c *cli.Context) {
+				if c.String("bucket") == "" {
+					fmt.Fprintln(os.Stderr, "bucket name required")
+					cli.ShowSubcommandHelp(c)
+					os.Exit(1)
+				}
+
+				if c.String("stream") == "" {
+					fmt.Fprintln(os.Stderr, "stream name required")
+					cli.ShowSubcommandHelp(c)
+					os.Exit(1)
+				}
+
+				store(c.String("stream"), c.String("bucket"), c.Int("shard"))
+			},
+		},
+		{
+			Name:  "shards",
+			Usage: "list shards for stream",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "stream",
+					Usage: "Named triton stream",
+				}},
+			Action: func(c *cli.Context) {
+				if c.String("stream") == "" {
+					fmt.Fprintln(os.Stderr, "stream name required")
+					cli.ShowSubcommandHelp(c)
+					os.Exit(1)
+				}
+
+				listShards(c.String("stream"))
+			},
+		},
+	}
+
+	app.Run(os.Args)
 }
