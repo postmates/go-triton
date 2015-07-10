@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -55,13 +56,13 @@ func openDB() *sql.DB {
 
 // Loop on records read from the stream, send it to the store.
 // Provided signal channel will tell us when to quit.
-func loopStream(stream *triton.Stream, store *triton.Store, sigs chan os.Signal) {
+func loopStream(stream *triton.Stream, store *triton.Store, quit chan bool) {
 	logTime := time.Now()
 	recCount := 0
 
 	for {
 		if time.Since(logTime) >= LOG_INTERVAL {
-			log.Printf("Recorded %d records", recCount)
+			log.Printf("Recorded %d records for (%s, %s)", recCount, stream.StreamName, stream.ShardID)
 			logTime = time.Now()
 			recCount = 0
 		}
@@ -82,9 +83,8 @@ func loopStream(stream *triton.Stream, store *triton.Store, sigs chan os.Signal)
 		}
 
 		select {
-		case <-sigs:
-			// The caller is probably closing too, but just to make sure our
-			// graceful exit looks really graceful, do it here.
+		case <-quit:
+			log.Println("Quit signal received for", stream.ShardID)
 			store.Close()
 			return
 		default:
@@ -93,18 +93,8 @@ func loopStream(stream *triton.Stream, store *triton.Store, sigs chan os.Signal)
 	}
 }
 
-func store(streamName, bucketName string, shardNum int) {
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-
-	sc := openStreamConfig(streamName)
-
+func setupStoreAndStream(sc *triton.StreamConfig, shardID string, bucketName string, db *sql.DB) (stream *triton.Stream, store *triton.Store) {
 	ksvc := kinesis.New(&aws.Config{Region: sc.RegionName})
-
-	shardID, err := triton.PickShardID(ksvc, sc.StreamName, shardNum)
-
-	db := openDB()
-	defer db.Close()
 
 	c, err := triton.NewCheckpointer("triton-store", sc.StreamName, shardID, db)
 	if err != nil {
@@ -116,7 +106,6 @@ func store(streamName, bucketName string, shardNum int) {
 		log.Fatalln("Failed to load last sequence number", err)
 	}
 
-	var stream *triton.Stream
 	if len(seqNum) > 0 {
 		log.Printf("Opening stream %s-%s at %s", sc.StreamName, shardID, seqNum)
 		stream = triton.NewStreamFromSequence(ksvc, sc.StreamName, shardID, seqNum)
@@ -128,13 +117,84 @@ func store(streamName, bucketName string, shardNum int) {
 	s3_svc := s3.New(&aws.Config{Region: sc.RegionName})
 	u := triton.NewUploader(s3_svc, bucketName)
 
-	store := triton.NewStore(sc.StreamName, shardID, u, c)
-	defer store.Close()
+	store = triton.NewStore(sc.StreamName, shardID, u, c)
+	return
+}
 
-	loopStream(stream, store, sigs)
+// Store Command
+// Spin up go routine for each of our shards and store the data in S3
+//
+// NOTE: for now we're planning on having a single process handle all our
+// shards.  In the future, as this thing scales, it will probably be convinient
+// to have command line arguments to indicate which shards we should process.
+func store(streamName, bucketName string) {
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+
+	sc := openStreamConfig(streamName)
+
+	ksvc := kinesis.New(&aws.Config{Region: sc.RegionName})
+
+	db := openDB()
+	defer db.Close()
+
+	shards, err := triton.ListShards(ksvc, sc.StreamName)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error listing shards", err)
+		os.Exit(1)
+	}
+
+	var wg sync.WaitGroup
+
+	anyQuit := make(chan bool, 1)
+	quitChans := make([]chan bool, 0, 10)
+	for _, shardID := range shards {
+		quitChan := make(chan bool, 1)
+		quitChans = append(quitChans, quitChan)
+
+		stream, store := setupStoreAndStream(sc, shardID, bucketName, db)
+
+		wg.Add(1)
+
+		go func() {
+			loopStream(stream, store, quitChan)
+
+			// The order is important here, because anyQuit isn't a big
+			// channel, it could block.
+			wg.Done()
+
+			anyQuit <- true
+		}()
+	}
+
+	// Channel logic
+	// Basically we have a couple of conditions that can cause us to exit.
+	// 1. We received a signal to stop
+	// 2. Any of our worker routines quit
+	//
+	// Once we've decided to stop, we want to tell all our workers to quit,
+	// then wait for them to do so.
+	select {
+	case <-sigs:
+		break
+	case <-anyQuit:
+		break
+	}
+
+	log.Println("Quitting")
+	for _, c := range quitChans {
+		c <- true
+	}
+
+	log.Println("Waiting for workers to exit")
+	wg.Wait()
+
 	log.Println("Done")
 }
 
+// List Shards Command
+//
+// Just print out a list of shards for the given stream
 func listShards(streamName string) {
 	sc := openStreamConfig(streamName)
 	ksvc := kinesis.New(&aws.Config{Region: sc.RegionName})
@@ -187,7 +247,7 @@ func main() {
 					os.Exit(1)
 				}
 
-				store(c.String("stream"), c.String("bucket"), c.Int("shard"))
+				store(c.String("stream"), c.String("bucket"))
 			},
 		},
 		{
