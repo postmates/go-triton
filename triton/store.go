@@ -63,7 +63,10 @@ func (s *Store) closeWriter() error {
 				log.Println("Failed to cleanup:", err)
 				return fmt.Errorf("Failed to cleanup writer")
 			}
+
 		}
+
+		s.currentFilename = nil
 
 		// Now that we've successfully uploaded the data, we can checkpoint
 		// this write.

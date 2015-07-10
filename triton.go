@@ -63,6 +63,8 @@ func loopStream(stream *triton.Stream, store *triton.Store, quit chan bool) {
 	logTime := time.Now()
 	recCount := 0
 
+	defer store.Close()
+
 	for {
 		if time.Since(logTime) >= LOG_INTERVAL {
 			log.Printf("Recorded %d records for (%s, %s)", recCount, stream.StreamName, stream.ShardID)
@@ -72,23 +74,25 @@ func loopStream(stream *triton.Stream, store *triton.Store, quit chan bool) {
 
 		r, err := stream.Read()
 		if err != nil {
-			log.Fatalln("Failed to read from stream:", err)
+			log.Printf("Failed to read from (%s, %s): %v", stream.StreamName, stream.ShardID, err)
+			return
 		}
 
 		if r == nil {
-			panic("r is nil?")
+			log.Printf("r for (%s, %s) is nil?", stream.StreamName, stream.ShardID)
+			return
 		}
 
 		recCount += 1
 		err = store.PutRecord(r)
 		if err != nil {
-			log.Fatalln("Failed to put record:", err)
+			log.Println("Failed to put record:", err)
+			return
 		}
 
 		select {
 		case <-quit:
-			log.Println("Quit signal received for", stream.ShardID)
-			store.Close()
+			log.Printf("Quit signal received for (%s, %s)", stream.StreamName, stream.ShardID)
 			return
 		default:
 			continue
@@ -96,19 +100,22 @@ func loopStream(stream *triton.Stream, store *triton.Store, quit chan bool) {
 	}
 }
 
-func setupStoreAndStream(sc *triton.StreamConfig, shardID string, bucketName string, skipToLatest bool, db *sql.DB) (stream *triton.Stream, store *triton.Store) {
+func storeShard(sc *triton.StreamConfig, shardID string, bucketName string, skipToLatest bool, db *sql.DB, quitChan chan bool) {
 	ksvc := kinesis.New(&aws.Config{Region: sc.RegionName})
 
 	c, err := triton.NewCheckpointer("triton-store", sc.StreamName, shardID, db)
 	if err != nil {
-		log.Fatalln("Failed to open Checkpointer", err)
+		log.Println("Failed to open Checkpointer", err)
+		return
 	}
 
 	seqNum, err := c.LastSequenceNumber()
 	if err != nil {
-		log.Fatalln("Failed to load last sequence number", err)
+		log.Println("Failed to load last sequence number", err)
+		return
 	}
 
+	var stream *triton.Stream
 	if !skipToLatest && len(seqNum) > 0 {
 		log.Printf("Opening stream %s-%s at %s", sc.StreamName, shardID, seqNum)
 		stream = triton.NewStreamFromSequence(ksvc, sc.StreamName, shardID, seqNum)
@@ -120,8 +127,9 @@ func setupStoreAndStream(sc *triton.StreamConfig, shardID string, bucketName str
 	s3_svc := s3.New(&aws.Config{Region: sc.RegionName})
 	u := triton.NewUploader(s3_svc, bucketName)
 
-	store = triton.NewStore(sc.StreamName, shardID, u, c)
-	return
+	store := triton.NewStore(sc.StreamName, shardID, u, c)
+
+	loopStream(stream, store, quitChan)
 }
 
 // Store Command
@@ -155,24 +163,22 @@ func store(streamName, bucketName string, skipToLatest bool) {
 		quitChan := make(chan bool, 1)
 		quitChans = append(quitChans, quitChan)
 
-		stream, store := setupStoreAndStream(sc, shardID, bucketName, skipToLatest, db)
-
 		wg.Add(1)
 
-		go func() {
-			loopStream(stream, store, quitChan)
+		go func(shardID string, qc chan bool) {
+			storeShard(sc, shardID, bucketName, skipToLatest, db, qc)
 
 			// The order is important here, because anyQuit isn't a big
 			// channel, it could block.
 			wg.Done()
 
 			anyQuit <- true
-		}()
+		}(shardID, quitChan)
 	}
 
 	// Channel logic
 	// Basically we have a couple of conditions that can cause us to exit.
-	// 1. We received a signal to stop
+	// 1. We received an os signal to stop
 	// 2. Any of our worker routines quit
 	//
 	// Once we've decided to stop, we want to tell all our workers to quit,
