@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"time"
 )
 
 // A checkpointer manages saving and loading savepoints for reading from a
@@ -39,8 +40,8 @@ func (c *Checkpointer) Checkpoint(sequenceNumber string) (err error) {
 		log.Printf("Updating checkpoint for %s-%s: %s",
 			c.streamName, c.shardID, sequenceNumber)
 		res, err := txn.Exec(
-			"UPDATE triton_checkpoint SET seq_num=$1 WHERE client=$2 AND stream=$3 AND shard=$4",
-			sequenceNumber, c.clientName, c.streamName, c.shardID)
+			"UPDATE triton_checkpoint SET seq_num=$1, updated=$2 WHERE client=$3 AND stream=$4 AND shard=$5",
+			sequenceNumber, time.Now().Unix(), c.clientName, c.streamName, c.shardID)
 		if err != nil {
 			txn.Rollback()
 			return err
@@ -56,8 +57,8 @@ func (c *Checkpointer) Checkpoint(sequenceNumber string) (err error) {
 		log.Printf("Creating checkpoint for %s-%s: %s",
 			c.streamName, c.shardID, sequenceNumber)
 		_, err := txn.Exec(
-			"INSERT INTO triton_checkpoint VALUES ($1, $2, $3, $4)",
-			c.clientName, c.streamName, c.shardID, sequenceNumber)
+			"INSERT INTO triton_checkpoint VALUES ($1, $2, $3, $4, $5)",
+			c.clientName, c.streamName, c.shardID, sequenceNumber, time.Now().Unix())
 
 		if err != nil {
 			txn.Rollback()
@@ -93,6 +94,7 @@ CREATE TABLE IF NOT EXISTS triton_checkpoint (
 	stream VARCHAR(255) NOT NULL,
 	shard VARCHAR(255) NOT NULL,
 	seq_num VARCHAR(255) NOT NULL,
+	updated INTEGER NOT NULL,
 	PRIMARY KEY (client, stream, shard))
 `
 
