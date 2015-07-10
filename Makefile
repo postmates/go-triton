@@ -4,13 +4,13 @@ export GOPATH=$(shell echo $$PWD)
 all: build/bin/triton
 
 deps:
-	go get -d triton/commands
+	go get -d ./
 
 triton: build deps
-	go build -o build/triton src/triton/commands/triton.go
+	go build -o build/triton ./triton.go
 
 build:
 	mkdir -p build
 
 clean:
-	rm -rf build pkg
+	rm -rf build pkg src

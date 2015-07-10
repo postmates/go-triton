@@ -11,13 +11,13 @@ import (
 	"syscall"
 	"time"
 
+	"./triton"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/codegangsta/cli"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
-	"triton"
 )
 
 var LOG_INTERVAL = 10 * time.Second
