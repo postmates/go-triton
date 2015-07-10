@@ -51,6 +51,9 @@ func openDB() *sql.DB {
 		log.Fatalln("Failed to open db", err)
 	}
 
+	// only for sqllite
+	db.SetMaxOpenConns(1)
+
 	return db
 }
 
