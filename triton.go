@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"os/signal"
 	"sync"
@@ -14,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/codegangsta/cli"
+	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/postmates/postal-go-triton/triton"
 )
@@ -44,17 +46,31 @@ func openStreamConfig(streamName string) *triton.StreamConfig {
 	return sc
 }
 
-func openDB() *sql.DB {
-	// TODO: pgsql option
-	db, err := sql.Open("sqlite3", "triton-s3.db")
+func openDB(db_url_s string) (db *sql.DB) {
+	db_url, err := url.Parse(db_url_s)
 	if err != nil {
-		log.Fatalln("Failed to open db", err)
+		log.Fatalln("Failed to parse", db_url_s)
 	}
 
-	// only for sqllite
-	db.SetMaxOpenConns(1)
+	if db_url.Scheme == "sqlite" {
+		db, err = sql.Open("sqlite3", "triton-s3.db")
+		if err != nil {
+			log.Fatalln("Failed to open db", err)
+		}
 
-	return db
+		// sqlite doesn't so much like concurrency
+		db.SetMaxOpenConns(1)
+		return
+	} else if db_url.Scheme == "postgres" {
+		db, err = sql.Open("postgres", db_url_s)
+		if err != nil {
+			log.Fatalln("Failed to open db", err)
+		}
+		return
+	} else {
+		log.Fatalln("Unknown db scheme", db_url.Scheme)
+		return
+	}
 }
 
 // Loop on records read from the stream, send it to the store.
@@ -138,7 +154,7 @@ func storeShard(sc *triton.StreamConfig, shardID string, bucketName string, skip
 // NOTE: for now we're planning on having a single process handle all our
 // shards.  In the future, as this thing scales, it will probably be convinient
 // to have command line arguments to indicate which shards we should process.
-func store(streamName, bucketName string, skipToLatest bool) {
+func store(streamName, bucketName string, dbUrl string, skipToLatest bool) {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
@@ -146,7 +162,7 @@ func store(streamName, bucketName string, skipToLatest bool) {
 
 	ksvc := kinesis.New(&aws.Config{Region: sc.RegionName})
 
-	db := openDB()
+	db := openDB(dbUrl)
 	defer db.Close()
 
 	shards, err := triton.ListShards(ksvc, sc.StreamName)
@@ -234,10 +250,6 @@ func main() {
 					Name:  "stream",
 					Usage: "Named triton stream",
 				},
-				cli.IntFlag{
-					Name:  "shard",
-					Usage: "Shard number",
-				},
 				cli.StringFlag{
 					Name:   "bucket",
 					Usage:  "Destination S3 bucket",
@@ -246,6 +258,12 @@ func main() {
 				cli.BoolFlag{
 					Name:  "skip-to-latest",
 					Usage: "Skip to latest in stream (ignoring previous checkpoints)",
+				},
+				cli.StringFlag{
+					Name:   "snapshot-db",
+					Usage:  "Database connect string for storign snapshots. Defaults to local sqlite.",
+					Value:  "sqlite://triton.db",
+					EnvVar: "TRITON_DB",
 				},
 			},
 			Action: func(c *cli.Context) {
@@ -261,7 +279,7 @@ func main() {
 					os.Exit(1)
 				}
 
-				store(c.String("stream"), c.String("bucket"), c.Bool("skip-to-latest"))
+				store(c.String("stream"), c.String("bucket"), c.String("snapshot-db"), c.Bool("skip-to-latest"))
 			},
 		},
 		{
