@@ -3,7 +3,7 @@
 all: test triton
 
 test:
-	go test github.com/postmates/postal-go-triton/triton
+	go test github.com/postmates/go-triton/triton
 
 deps:
 	go get -d .
@@ -15,4 +15,4 @@ build:
 	mkdir -p build
 
 clean:
-	rm -rf build pkg src
+	rm -rf build

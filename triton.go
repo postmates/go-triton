@@ -17,7 +17,7 @@ import (
 	"github.com/codegangsta/cli"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/postmates/postal-go-triton/triton"
+	"github.com/postmates/go-triton/triton"
 )
 
 var LOG_INTERVAL = 10 * time.Second
