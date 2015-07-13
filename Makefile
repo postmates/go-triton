@@ -1,10 +1,12 @@
-.PHONY: triton
-export GOPATH=$(shell echo $$PWD)
+.PHONY: triton test
 
-all: build/bin/triton
+all: test triton
+
+test:
+	go test github.com/postmates/postal-go-triton/triton
 
 deps:
-	go get -d ./
+	go get -d .
 
 triton: build deps
 	go build -o build/triton ./triton.go
