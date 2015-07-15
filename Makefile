@@ -1,8 +1,8 @@
-.PHONY: triton test
+.PHONY: triton test deps
 
 all: test triton
 
-test:
+test: deps
 	go test github.com/postmates/go-triton/triton
 
 deps:
