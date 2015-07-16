@@ -34,9 +34,11 @@ func (c *Checkpointer) Checkpoint(sequenceNumber string) (err error) {
 		return err
 	}
 
-	defer rows.Close()
+	hasCheckpoint := rows.Next()
 
-	if rows.Next() {
+	rows.Close()
+
+	if hasCheckpoint {
 		log.Printf("Updating checkpoint for %s-%s: %s",
 			c.streamName, c.shardID, sequenceNumber)
 		res, err := txn.Exec(
