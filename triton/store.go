@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/service/kinesis"
-	"github.com/golang/snappy/snappy"
+	"github.com/golang/snappy"
 )
 
 type CheckpointService interface {

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/snappy/snappy"
+	"github.com/golang/snappy"
 )
 
 type NullS3Service struct{}
