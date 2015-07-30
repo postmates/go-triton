@@ -18,6 +18,7 @@ type KinesisService interface {
 
 type S3Service interface {
 	GetObject(input *s3.GetObjectInput) (*s3.GetObjectOutput, error)
+	ListObjects(*s3.ListObjectsInput) (*s3.ListObjectsOutput, error)
 }
 
 type S3UploaderService interface {

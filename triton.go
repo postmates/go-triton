@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -118,7 +119,7 @@ func loopStream(stream *triton.Stream, store *triton.Store, quit chan bool) {
 }
 
 func storeShard(sc *triton.StreamConfig, shardID string, bucketName string, skipToLatest bool, db *sql.DB, quitChan chan bool) {
-	ksvc := kinesis.New(&aws.Config{Region: sc.RegionName})
+	ksvc := kinesis.New(&aws.Config{Region: aws.String(sc.RegionName)})
 
 	c, err := triton.NewCheckpointer("triton-store", sc.StreamName, shardID, db)
 	if err != nil {
@@ -141,7 +142,7 @@ func storeShard(sc *triton.StreamConfig, shardID string, bucketName string, skip
 		stream = triton.NewStream(ksvc, sc.StreamName, shardID)
 	}
 
-	s3_svc := s3.New(&aws.Config{Region: sc.RegionName})
+	s3_svc := s3.New(&aws.Config{Region: aws.String(sc.RegionName)})
 	u := triton.NewUploader(s3_svc, bucketName)
 
 	store := triton.NewStore(sc.StreamName, shardID, u, c)
@@ -161,7 +162,7 @@ func store(streamName, bucketName string, dbUrl string, skipToLatest bool) {
 
 	sc := openStreamConfig(streamName)
 
-	ksvc := kinesis.New(&aws.Config{Region: sc.RegionName})
+	ksvc := kinesis.New(&aws.Config{Region: aws.String(sc.RegionName)})
 
 	db := openDB(dbUrl)
 	defer db.Close()
@@ -223,7 +224,7 @@ func store(streamName, bucketName string, dbUrl string, skipToLatest bool) {
 // Just print out a list of shards for the given stream
 func listShards(streamName string) {
 	sc := openStreamConfig(streamName)
-	ksvc := kinesis.New(&aws.Config{Region: sc.RegionName})
+	ksvc := kinesis.New(&aws.Config{Region: aws.String(sc.RegionName)})
 
 	shards, err := triton.ListShards(ksvc, sc.StreamName)
 	if err != nil {
@@ -315,17 +316,19 @@ func main() {
 					EnvVar: "TRITON_BUCKET",
 				},
 				cli.StringFlag{
-					Name:  "file",
-					Usage: "filename",
+					Name:  "start-date",
+					Usage: "Date to start streaming from YYYYMMDD",
+				},
+				cli.StringFlag{
+					Name:  "end-date",
+					Usage: "(optional) Date to stop streaming from YYYYMMDD",
 				}},
 			Action: func(c *cli.Context) {
-				/*
-					if c.String("stream") == "" {
-						fmt.Fprintln(os.Stderr, "stream name required")
-						cli.ShowSubcommandHelp(c)
-						os.Exit(1)
-					}
-				*/
+				if c.String("stream") == "" {
+					fmt.Fprintln(os.Stderr, "stream name required")
+					cli.ShowSubcommandHelp(c)
+					os.Exit(1)
+				}
 
 				if c.String("bucket") == "" {
 					fmt.Fprintln(os.Stderr, "bucket name required")
@@ -333,19 +336,42 @@ func main() {
 					os.Exit(1)
 				}
 
-				if c.String("file") == "" {
-					fmt.Fprintln(os.Stderr, "file name required")
+				if c.String("start-date") == "" {
+					fmt.Fprintln(os.Stderr, "start-date required")
 					cli.ShowSubcommandHelp(c)
 					os.Exit(1)
 				}
 
-				s3Svc := s3.New(&aws.Config{Region: "us-west-1"})
-				sa, err := triton.NewStoreArchive(c.String("bucket"), c.String("file"), s3Svc)
+				// TODO: configure region
+				s3Svc := s3.New(&aws.Config{Region: aws.String("us-west-1")})
+
+				start, err := time.Parse("20060102", c.String("start-date"))
 				if err != nil {
-					log.Fatalln("Error creating archive", err)
+					fmt.Fprintln(os.Stderr, "invalid start-date")
+					cli.ShowSubcommandHelp(c)
+					os.Exit(1)
 				}
 
-				r, err := sa.Open()
+				end := start
+				if c.String("end-date") != "" {
+					end, err = time.Parse("20060102", c.String("end-date"))
+					if err != nil {
+						fmt.Fprintln(os.Stderr, "invalid end-date")
+						cli.ShowSubcommandHelp(c)
+						os.Exit(1)
+					}
+				}
+
+				sc := openStreamConfig(c.String("stream"))
+
+				saList, err := triton.ListArchive(c.String("bucket"), sc.StreamName, start, end, s3Svc)
+				if err != nil {
+					log.Fatalln("Failure listing archive:", err)
+				}
+
+				log.Printf("Found %d archive files", len(saList))
+
+				r, err := saList[0].Open()
 				if err != nil {
 					log.Fatalln("Error opening archive", err)
 				}
@@ -360,7 +386,11 @@ func main() {
 						}
 					}
 
-					fmt.Println(rec)
+					b, err := json.Marshal(rec)
+					if err != nil {
+						panic(err)
+					}
+					fmt.Println(string(b))
 				}
 
 			},

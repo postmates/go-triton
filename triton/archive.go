@@ -2,10 +2,13 @@ package triton
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"log"
 	"regexp"
 	"time"
+
+	"github.com/aws/aws-sdk-go/aws"
+	//"github.com/aws/aws-sdk-go/aws/awsutil"
+	"github.com/aws/aws-sdk-go/service/s3"
 )
 
 type StoreArchive struct {
@@ -75,4 +78,58 @@ func NewStoreArchive(bucketName, keyName string, svc S3Service) (sa StoreArchive
 	}
 
 	return sa, nil
+}
+
+func listDatesFromRange(start, end time.Time) (dates []time.Time) {
+	dates = make([]time.Time, 0, 2)
+	current := start
+	day, _ := time.ParseDuration("24h")
+
+	if start.After(end) {
+		panic("invalid date range")
+	}
+
+	dates = append(dates, current)
+	for !current.Equal(end) {
+		dates = append(dates, current)
+		current = current.Add(day)
+	}
+
+	return
+}
+
+func ListArchive(bucketName, streamName string, startDate, endDate time.Time, s3Svc S3Service) ([]StoreArchive, error) {
+	allDates := listDatesFromRange(startDate, endDate)
+	saList := make([]StoreArchive, 0, len(allDates))
+
+	for _, date := range allDates {
+		dateStr := date.Format("20060102")
+		prefix := fmt.Sprintf("%s/%s-", dateStr, streamName)
+		resp, err := s3Svc.ListObjects(&s3.ListObjectsInput{
+			Bucket: aws.String(bucketName),
+			Prefix: aws.String(prefix),
+		})
+
+		if err != nil {
+			return nil, err
+		}
+
+		// TODO: sorting, archive vs. shard
+		for _, o := range resp.Contents {
+			sa, err := NewStoreArchive(bucketName, *o.Key, s3Svc)
+			if err != nil {
+				log.Println("Failed to parse contents", *o.Key)
+				continue
+			}
+
+			saList = append(saList, sa)
+		}
+
+		// TODO: Would be nice to handle this, limit is 1000
+		if *resp.IsTruncated {
+			log.Println("WARNING: truncated s3 response")
+		}
+	}
+
+	return saList, nil
 }

@@ -76,7 +76,7 @@ func (s *Stream) fetchMoreRecords() (err error) {
 	}
 
 	gri := &kinesis.GetRecordsInput{
-		Limit:         aws.Long(1000),
+		Limit:         aws.Int64(1000),
 		ShardIterator: s.NextIteratorValue,
 	}
 
