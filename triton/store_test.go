@@ -10,8 +10,6 @@ import (
 	"github.com/golang/snappy"
 )
 
-type NullS3Service struct{}
-
 func TestNewStore(t *testing.T) {
 	NewStore("test-stream", "0001", nil, nil)
 }

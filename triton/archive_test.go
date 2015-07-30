@@ -6,9 +6,14 @@ import (
 )
 
 func TestNewArchive(t *testing.T) {
-	sa, err := NewStoreArchive("foo", "20150801/test_stream-archive-123455.tri", nil)
+	key := "20150801/test_stream-archive-123455.tri"
+	sa, err := NewStoreArchive("foo", key, nil)
 	if err != nil {
 		t.Fatal("Error creating sa", err)
+	}
+
+	if sa.Key != key {
+		t.Error("Failed to store key")
 	}
 
 	if sa.StreamName != "test_stream" {
@@ -52,5 +57,17 @@ func TestNewArchiveShard(t *testing.T) {
 
 	if sa.SortValue != 123455 {
 		t.Error("Sort value mismatch")
+	}
+}
+
+func TestOpen(t *testing.T) {
+	sa, err := NewStoreArchive("foo", "20150801/test_stream-shardId-00000000-123455.tri", &nullS3Service{})
+	if err != nil {
+		t.Fatal("Error creating sa", err)
+	}
+
+	_, err = sa.Open()
+	if err != nil {
+		t.Fatal("Failed to open", err)
 	}
 }

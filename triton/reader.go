@@ -18,9 +18,9 @@ func (r *Reader) ReadRecord() (rec map[string]interface{}, err error) {
 	return
 }
 
-func NewReader(ir io.Reader) (or Reader) {
+func NewReader(ir io.Reader) (or *Reader) {
 	sr := snappy.NewReader(ir)
 	mr := msgp.NewReader(sr)
 
-	return Reader{mr}
+	return &Reader{mr}
 }

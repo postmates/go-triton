@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"io"
 	"log"
 	"net/url"
 	"os"
@@ -298,6 +299,70 @@ func main() {
 				}
 
 				listShards(c.String("stream"))
+			},
+		},
+		{
+			Name:  "cat",
+			Usage: "cat stored triton data from s3",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "stream",
+					Usage: "Named triton stream",
+				},
+				cli.StringFlag{
+					Name:   "bucket",
+					Usage:  "Source S3 bucket",
+					EnvVar: "TRITON_BUCKET",
+				},
+				cli.StringFlag{
+					Name:  "file",
+					Usage: "filename",
+				}},
+			Action: func(c *cli.Context) {
+				/*
+					if c.String("stream") == "" {
+						fmt.Fprintln(os.Stderr, "stream name required")
+						cli.ShowSubcommandHelp(c)
+						os.Exit(1)
+					}
+				*/
+
+				if c.String("bucket") == "" {
+					fmt.Fprintln(os.Stderr, "bucket name required")
+					cli.ShowSubcommandHelp(c)
+					os.Exit(1)
+				}
+
+				if c.String("file") == "" {
+					fmt.Fprintln(os.Stderr, "file name required")
+					cli.ShowSubcommandHelp(c)
+					os.Exit(1)
+				}
+
+				s3Svc := s3.New(&aws.Config{Region: "us-west-1"})
+				sa, err := triton.NewStoreArchive(c.String("bucket"), c.String("file"), s3Svc)
+				if err != nil {
+					log.Fatalln("Error creating archive", err)
+				}
+
+				r, err := sa.Open()
+				if err != nil {
+					log.Fatalln("Error opening archive", err)
+				}
+
+				for {
+					rec, err := r.ReadRecord()
+					if err != nil {
+						if err == io.EOF {
+							break
+						} else {
+							log.Fatalln("Failed reading record", err)
+						}
+					}
+
+					fmt.Println(rec)
+				}
+
 			},
 		},
 	}

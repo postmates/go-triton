@@ -3,6 +3,7 @@ package triton
 import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/kinesis"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
@@ -16,6 +17,7 @@ type KinesisService interface {
 }
 
 type S3Service interface {
+	GetObject(input *s3.GetObjectInput) (*s3.GetObjectOutput, error)
 }
 
 type S3UploaderService interface {
@@ -24,4 +26,11 @@ type S3UploaderService interface {
 
 type DynamoDBService interface {
 	UpdateItem(input *dynamodb.UpdateItemInput) (*dynamodb.UpdateItemOutput, error)
+}
+
+type nullS3Service struct{}
+
+func (s *nullS3Service) GetObject(*s3.GetObjectInput) (*s3.GetObjectOutput, error) {
+	goo := &s3.GetObjectOutput{}
+	return goo, nil
 }

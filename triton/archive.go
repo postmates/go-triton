@@ -2,6 +2,7 @@ package triton
 
 import (
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"regexp"
 	"time"
@@ -16,11 +17,22 @@ type StoreArchive struct {
 	T         time.Time
 	SortValue int
 
-	s3_srv *s3.S3
+	s3Svc S3Service
 }
 
 func (sa *StoreArchive) Open() (r *Reader, err error) {
-	return nil, nil
+	out, err := sa.s3Svc.GetObject(&s3.GetObjectInput{
+		Bucket: aws.String(sa.Bucket),
+		Key:    aws.String(sa.Key),
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	r = NewReader(out.Body)
+
+	return
 }
 
 func (sa *StoreArchive) parseKeyName(keyName string) (err error) {
@@ -52,9 +64,10 @@ func (sa *StoreArchive) parseKeyName(keyName string) (err error) {
 	return
 }
 
-func NewStoreArchive(bucketName, keyName string, s3_srv *s3.S3) (sa StoreArchive, err error) {
+func NewStoreArchive(bucketName, keyName string, svc S3Service) (sa StoreArchive, err error) {
 	sa.Bucket = bucketName
 	sa.Key = keyName
+	sa.s3Svc = svc
 
 	err = sa.parseKeyName(keyName)
 	if err != nil {
