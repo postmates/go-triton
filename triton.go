@@ -364,20 +364,13 @@ func main() {
 
 				sc := openStreamConfig(c.String("stream"))
 
-				saList, err := triton.ListArchive(c.String("bucket"), sc.StreamName, start, end, s3Svc)
+				set, err := triton.NewArchiveSet(c.String("bucket"), sc.StreamName, start, end, s3Svc)
 				if err != nil {
 					log.Fatalln("Failure listing archive:", err)
 				}
 
-				log.Printf("Found %d archive files", len(saList))
-
-				r, err := saList[0].Open()
-				if err != nil {
-					log.Fatalln("Error opening archive", err)
-				}
-
 				for {
-					rec, err := r.ReadRecord()
+					rec, err := set.ReadRecord()
 					if err != nil {
 						if err == io.EOF {
 							break
