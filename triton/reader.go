@@ -7,20 +7,24 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
-type Reader struct {
+type Reader interface {
+	ReadRecord() (rec map[string]interface{}, err error)
+}
+
+type IOReader struct {
 	mr *msgp.Reader
 }
 
-func (r *Reader) ReadRecord() (rec map[string]interface{}, err error) {
+func (r *IOReader) ReadRecord() (rec map[string]interface{}, err error) {
 	rec = make(map[string]interface{})
 
 	err = r.mr.ReadMapStrIntf(rec)
 	return
 }
 
-func NewReader(ir io.Reader) (or *Reader) {
+func NewReader(ir io.Reader) (or Reader) {
 	sr := snappy.NewReader(ir)
 	mr := msgp.NewReader(sr)
 
-	return &Reader{mr}
+	return &IOReader{mr}
 }

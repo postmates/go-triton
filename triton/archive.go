@@ -22,7 +22,7 @@ type StoreArchive struct {
 	s3Svc S3Service
 }
 
-func (sa *StoreArchive) Open() (r *Reader, err error) {
+func (sa *StoreArchive) Open() (r Reader, err error) {
 	out, err := sa.s3Svc.GetObject(&s3.GetObjectInput{
 		Bucket: aws.String(sa.Bucket),
 		Key:    aws.String(sa.Key),

@@ -12,7 +12,7 @@ import (
 
 type ArchiveSet struct {
 	saSet         []StoreArchive
-	currentReader *Reader
+	currentReader Reader
 }
 
 func (as *ArchiveSet) openNext() {
