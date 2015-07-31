@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
-	//"github.com/aws/aws-sdk-go/aws/awsutil"
 	"github.com/aws/aws-sdk-go/service/s3"
 )
 
@@ -77,22 +76,4 @@ func NewStoreArchive(bucketName, keyName string, svc S3Service) (sa StoreArchive
 	}
 
 	return sa, nil
-}
-
-func listDatesFromRange(start, end time.Time) (dates []time.Time) {
-	dates = make([]time.Time, 0, 2)
-	current := start
-	day, _ := time.ParseDuration("24h")
-
-	if start.After(end) {
-		panic("invalid date range")
-	}
-
-	dates = append(dates, current)
-	for !current.Equal(end) {
-		dates = append(dates, current)
-		current = current.Add(day)
-	}
-
-	return
 }
