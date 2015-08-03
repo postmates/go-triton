@@ -35,3 +35,8 @@ func (s *nullS3Service) GetObject(*s3.GetObjectInput) (*s3.GetObjectOutput, erro
 	goo := &s3.GetObjectOutput{}
 	return goo, nil
 }
+
+func (s *nullS3Service) ListObjects(*s3.ListObjectsInput) (*s3.ListObjectsOutput, error) {
+	loo := &s3.ListObjectsOutput{}
+	return loo, nil
+}

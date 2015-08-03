@@ -21,7 +21,7 @@ func (s *NullKinesisService) GetRecords(*kinesis.GetRecordsInput) (*kinesis.GetR
 	records := []*kinesis.Record{rec}
 	gso := &kinesis.GetRecordsOutput{
 		NextShardIterator:  aws.String("124"),
-		MillisBehindLatest: aws.Long(0),
+		MillisBehindLatest: aws.Int64(0),
 		Records:            records,
 	}
 	return gso, nil
