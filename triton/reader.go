@@ -22,7 +22,7 @@ func (r *IOReader) ReadRecord() (rec map[string]interface{}, err error) {
 	return
 }
 
-func NewReader(ir io.Reader) (or Reader) {
+func NewIOReader(ir io.Reader) (or Reader) {
 	sr := snappy.NewReader(ir)
 	mr := msgp.NewReader(sr)
 

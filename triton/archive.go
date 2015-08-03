@@ -31,7 +31,7 @@ func (sa *StoreArchive) Open() (r Reader, err error) {
 		return nil, err
 	}
 
-	r = NewReader(out.Body)
+	r = NewIOReader(out.Body)
 
 	return
 }
