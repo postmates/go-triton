@@ -29,8 +29,7 @@ func TestNewCheckpointer(t *testing.T) {
 	defer closeTestDB(db)
 
 	streamName := "test-stream"
-	shardID := "shard-0000"
-	c, err := NewCheckpointer("test", streamName, shardID, db)
+	c, err := NewCheckpointer("test", streamName, db)
 	if err != nil {
 		t.Errorf("Failed to create: %v", err)
 		return
@@ -41,16 +40,14 @@ func TestNewCheckpointer(t *testing.T) {
 		return
 	}
 
-	if c.clientName != "test" {
+	cdb := c.(*dbCheckpointer)
+
+	if cdb.clientName != "test" {
 		t.Errorf("Name mismatch")
 	}
 
-	if c.streamName != streamName {
+	if cdb.streamName != streamName {
 		t.Errorf("streamName mismatch")
-	}
-
-	if c.shardID != shardID {
-		t.Errorf("shardID mismatch")
 	}
 }
 
@@ -58,17 +55,18 @@ func TestCheckpoint(t *testing.T) {
 	db := openTestDB()
 	defer closeTestDB(db)
 
-	c, _ := NewCheckpointer("test", "test-stream", "shard-000", db)
+	sid := ShardID("shardId-0000")
+	c, _ := NewCheckpointer("test", "test-stream", db)
 
-	err := c.Checkpoint("1234")
+	err := c.Checkpoint(sid, "1234")
 	if err != nil {
 		t.Errorf("Failed to checkpoint: %v", err)
 		return
 	}
 
-	seqNum, err := c.LastSequenceNumber()
+	seqNum, err := c.LastSequenceNumber(sid)
 	if err != nil {
-		t.Errorf("Failed to load sequence number")
+		t.Errorf("Failed to load sequence number", err)
 		return
 	}
 
@@ -82,21 +80,23 @@ func TestCheckpointUpdate(t *testing.T) {
 	db := openTestDB()
 	defer closeTestDB(db)
 
-	c, _ := NewCheckpointer("test", "test-stream", "shard-000", db)
+	sid := ShardID("shardId-0000")
 
-	err := c.Checkpoint("1234")
+	c, _ := NewCheckpointer("test", "test-stream", db)
+
+	err := c.Checkpoint(sid, "1234")
 	if err != nil {
 		t.Errorf("Failed to checkpoint: %v", err)
 		return
 	}
 
-	err = c.Checkpoint("51234")
+	err = c.Checkpoint(sid, "51234")
 	if err != nil {
 		t.Errorf("Failed to checkpoint: %v", err)
 		return
 	}
 
-	seqNum, err := c.LastSequenceNumber()
+	seqNum, err := c.LastSequenceNumber(sid)
 	if err != nil {
 		t.Errorf("Failed to load sequence number")
 		return
@@ -112,9 +112,11 @@ func TestEmptyLastSequenceNumber(t *testing.T) {
 	db := openTestDB()
 	defer closeTestDB(db)
 
-	c, _ := NewCheckpointer("test", "test-stream", "shard-000", db)
+	sid := ShardID("shardId-0000")
 
-	seq, err := c.LastSequenceNumber()
+	c, _ := NewCheckpointer("test", "test-stream", db)
+
+	seq, err := c.LastSequenceNumber(sid)
 	if err != nil {
 		t.Errorf("Failed to get empty checkpoint")
 	}
