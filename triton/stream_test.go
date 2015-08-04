@@ -115,3 +115,34 @@ func TestRead(t *testing.T) {
 		t.Errorf("Should be a record")
 	}
 }
+
+func TestListShards(t *testing.T) {
+	svc := newTestKinesisService()
+	st := newTestKinesisStream("test-stream")
+
+	s1 := newTestKinesisShard()
+	st.AddShard(ShardID("0"), s1)
+
+	s2 := newTestKinesisShard()
+	st.AddShard(ShardID("1"), s2)
+
+	svc.AddStream(st)
+
+	shards, err := ListShards(svc, "test-stream")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if len(shards) != 2 {
+		t.Error("Failed to find 2 shards:", len(shards))
+		return
+	}
+
+	if shards[0] != ShardID("0") {
+		t.Error("Failed to identify shard 0")
+	}
+
+	if shards[1] != ShardID("1") {
+		t.Error("Failed to identify shard 1")
+	}
+}

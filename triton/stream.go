@@ -161,14 +161,14 @@ func PickShardID(svc KinesisService, streamName string, shardNum int) (sid Shard
 	return
 }
 
-func ListShards(svc KinesisService, streamName string) (shards []string, err error) {
+func ListShards(svc KinesisService, streamName string) (shards []ShardID, err error) {
 	resp, err := svc.DescribeStream(&kinesis.DescribeStreamInput{StreamName: aws.String(streamName)})
 	if err != nil {
 		return
 	}
 
 	for _, s := range resp.StreamDescription.Shards {
-		shards = append(shards, *s.ShardID)
+		shards = append(shards, ShardID(*s.ShardID))
 	}
 
 	return
