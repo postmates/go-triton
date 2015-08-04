@@ -2,52 +2,12 @@ package triton
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 )
-
-type ArchiveSet struct {
-	saSet         []StoreArchive
-	currentReader Reader
-}
-
-func (as *ArchiveSet) openNext() {
-	if len(as.saSet) > 0 {
-		nr, err := as.saSet[0].Open()
-		if err != nil {
-			// TODO: This coudl be handled, but we need to open the next one
-			panic(err)
-		}
-		as.currentReader = nr
-		as.saSet = as.saSet[1:]
-	}
-}
-
-func (as *ArchiveSet) ReadRecord() (rec map[string]interface{}, err error) {
-	for {
-		if as.currentReader == nil {
-			as.openNext()
-		}
-
-		// Nothing to open
-		if as.currentReader == nil {
-			return nil, io.EOF
-		}
-
-		rec, err := as.currentReader.ReadRecord()
-		if err != nil {
-			if err == io.EOF {
-				as.currentReader = nil
-			}
-		} else {
-			return rec, nil
-		}
-	}
-}
 
 func listDatesFromRange(start, end time.Time) (dates []time.Time) {
 	dates = make([]time.Time, 0, 2)
@@ -67,14 +27,14 @@ func listDatesFromRange(start, end time.Time) (dates []time.Time) {
 	return
 }
 
-func NewArchiveSet(bucketName, streamName string, startDate, endDate time.Time, s3Svc S3Service) (*ArchiveSet, error) {
+func NewStoreReader(svc S3Service, bucketName, streamName string, startDate, endDate time.Time) (Reader, error) {
 	allDates := listDatesFromRange(startDate, endDate)
-	saList := make([]StoreArchive, 0, len(allDates))
+	readers := make([]Reader, 0, len(allDates))
 
 	for _, date := range allDates {
 		dateStr := date.Format("20060102")
 		prefix := fmt.Sprintf("%s/%s-", dateStr, streamName)
-		resp, err := s3Svc.ListObjects(&s3.ListObjectsInput{
+		resp, err := svc.ListObjects(&s3.ListObjectsInput{
 			Bucket: aws.String(bucketName),
 			Prefix: aws.String(prefix),
 		})
@@ -85,13 +45,13 @@ func NewArchiveSet(bucketName, streamName string, startDate, endDate time.Time, 
 
 		// TODO: sorting, archive vs. shard
 		for _, o := range resp.Contents {
-			sa, err := NewStoreArchive(bucketName, *o.Key, s3Svc)
+			sa, err := NewStoreArchive(bucketName, *o.Key, svc)
 			if err != nil {
 				log.Println("Failed to parse contents", *o.Key)
 				continue
 			}
 
-			saList = append(saList, sa)
+			readers = append(readers, &sa)
 		}
 
 		// TODO: Would be nice to handle this, limit is 1000
@@ -100,5 +60,5 @@ func NewArchiveSet(bucketName, streamName string, startDate, endDate time.Time, 
 		}
 	}
 
-	return &ArchiveSet{saList, nil}, nil
+	return NewSerialReader(readers), nil
 }

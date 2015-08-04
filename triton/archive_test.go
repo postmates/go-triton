@@ -1,6 +1,7 @@
 package triton
 
 import (
+	"io"
 	"testing"
 	"time"
 )
@@ -60,14 +61,14 @@ func TestNewArchiveShard(t *testing.T) {
 	}
 }
 
-func TestOpen(t *testing.T) {
+func TestReadEmpty(t *testing.T) {
 	sa, err := NewStoreArchive("foo", "20150801/test_stream-shardId-00000000-123455.tri", &nullS3Service{})
 	if err != nil {
 		t.Fatal("Error creating sa", err)
 	}
 
-	_, err = sa.Open()
-	if err != nil {
-		t.Fatal("Failed to open", err)
+	_, err = sa.ReadRecord()
+	if err != io.EOF {
+		t.Fatal("Should have EOF: ", err)
 	}
 }

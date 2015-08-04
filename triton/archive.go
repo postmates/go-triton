@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 )
 
+// A StoreArchive represents an instance of a data file stored, usually, in S3.
 type StoreArchive struct {
 	StreamName string
 	Bucket     string
@@ -19,20 +20,24 @@ type StoreArchive struct {
 	SortValue int
 
 	s3Svc S3Service
+	rdr   Reader
 }
 
-func (sa *StoreArchive) Open() (r Reader, err error) {
-	out, err := sa.s3Svc.GetObject(&s3.GetObjectInput{
-		Bucket: aws.String(sa.Bucket),
-		Key:    aws.String(sa.Key),
-	})
+func (sa *StoreArchive) ReadRecord() (rec map[string]interface{}, err error) {
+	if sa.rdr == nil {
+		out, err := sa.s3Svc.GetObject(&s3.GetObjectInput{
+			Bucket: aws.String(sa.Bucket),
+			Key:    aws.String(sa.Key),
+		})
 
-	if err != nil {
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
+
+		sa.rdr = NewArchiveReader(out.Body)
 	}
 
-	r = NewIOReader(out.Body)
-
+	rec, err = sa.rdr.ReadRecord()
 	return
 }
 

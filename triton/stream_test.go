@@ -31,15 +31,15 @@ func (s *NullKinesisService) DescribeStream(input *kinesis.DescribeStreamInput) 
 	return nil, fmt.Errorf("Not Implemented")
 }
 
-func TestNewStream(t *testing.T) {
+func TestNewShardStreamReader(t *testing.T) {
 	svc := NullKinesisService{}
 
-	s := NewStream(&svc, "test-stream", "shard-0001")
+	s := NewShardStreamReader(&svc, "test-stream", "shard-0001")
 	if s.StreamName != "test-stream" {
 		t.Errorf("bad stream name")
 	}
 
-	if s.ShardID != "shard-0001" {
+	if s.ShardID != ShardID("shard-0001") {
 		t.Errorf("bad ShardID")
 	}
 
@@ -48,10 +48,10 @@ func TestNewStream(t *testing.T) {
 	}
 }
 
-func TestNewStreamFromSequence(t *testing.T) {
+func TestNewShardStreamReaderFromSequence(t *testing.T) {
 	svc := NullKinesisService{}
 
-	s := NewStreamFromSequence(&svc, "test-stream", "shard-0001", "abc123")
+	s := NewShardStreamReaderFromSequence(&svc, "test-stream", "shard-0001", "abc123")
 	if s.StreamName != "test-stream" {
 		t.Errorf("bad stream name")
 	}
@@ -71,7 +71,7 @@ func TestNewStreamFromSequence(t *testing.T) {
 
 func TestStreamWait(t *testing.T) {
 	svc := NullKinesisService{}
-	s := NewStream(&svc, "test-stream", "shard-0000")
+	s := NewShardStreamReader(&svc, "test-stream", "shard-0000")
 
 	n := time.Now()
 	s.wait(100 * time.Millisecond)
@@ -88,7 +88,7 @@ func TestStreamWait(t *testing.T) {
 
 func TestFetchMoreRecords(t *testing.T) {
 	svc := NullKinesisService{}
-	s := NewStream(&svc, "test-stream", "shard-0000")
+	s := NewShardStreamReader(&svc, "test-stream", "shard-0000")
 
 	err := s.fetchMoreRecords()
 	if err != nil {
@@ -103,9 +103,9 @@ func TestFetchMoreRecords(t *testing.T) {
 
 func TestRead(t *testing.T) {
 	svc := NullKinesisService{}
-	s := NewStream(&svc, "test-stream", "shard-0000")
+	s := NewShardStreamReader(&svc, "test-stream", "shard-0000")
 
-	r, err := s.Read()
+	r, err := s.Get()
 	if err != nil {
 		t.Errorf("Received error %v", err)
 		return
