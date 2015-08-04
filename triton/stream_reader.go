@@ -9,6 +9,10 @@ type StreamReader interface {
 	Checkpoint() error
 }
 
+type multiShardStreamReader struct {
+	readers []*ShardStreamReader
+}
+
 func NewStreamReader(svc KinesisService, streamName string, c Checkpointer) (sr StreamReader) {
 	// TODO: Implement
 	return
