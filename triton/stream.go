@@ -92,18 +92,29 @@ func (s *ShardStreamReader) fetchMoreRecords() (err error) {
 	return nil
 }
 
+// Get the next record from the Shard Stream
+//
+// If records are already loaded, this returns the next record quickly.
+//
+// If not, it may block fetching them from the underlying API.  In the event
+// the API doesn't have any records prepared either, this method will return a
+// nil record. This allows the caller to do other things rather than just
+// blocking in this call forever or needing to pass in other flow control
+// signals.
 func (s *ShardStreamReader) Get() (r *kinesis.Record, err error) {
-	for {
-		if len(s.records) > 0 {
-			r := s.records[0]
-			s.records = s.records[1:]
-			return r, nil
-		} else {
-			err := s.fetchMoreRecords()
-			if err != nil {
-				return nil, err
-			}
+	if len(s.records) == 0 {
+		err := s.fetchMoreRecords()
+		if err != nil {
+			return nil, err
 		}
+	}
+
+	if len(s.records) > 0 {
+		r := s.records[0]
+		s.records = s.records[1:]
+		return r, nil
+	} else {
+		return nil, nil
 	}
 }
 

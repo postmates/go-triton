@@ -29,21 +29,46 @@ func TestNewStreamReader(t *testing.T) {
 		return
 	}
 
-	sr := NewStreamReader(svc, "test-stream", c)
-
-	_, err = sr.ReadRecord()
+	sr, err := NewStreamReader(svc, "test-stream", c)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	_, err = sr.ReadRecord()
+	foundA := false
+	foundB := false
+
+	rec1, err := sr.ReadRecord()
 	if err != nil {
 		t.Error(err)
 		return
+	}
+
+	// Records could be in any order
+	if rec1["value"].(string) == "a" {
+		foundA = true
+	} else if rec1["value"].(string) == "b" {
+		foundB = true
+	}
+
+	rec2, err := sr.ReadRecord()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if rec2["value"].(string) == "a" {
+		foundA = true
+	} else if rec2["value"].(string) == "b" {
+		foundB = true
+	}
+
+	if !(foundA && foundB) {
+		t.Error("Failed to find records a and b")
 	}
 
 	sr.Checkpoint()
+
+	sr.Stop()
 
 	c1, err := c.LastSequenceNumber(ShardID("0"))
 	if c1 != SequenceNumber("a") {
