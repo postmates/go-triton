@@ -17,8 +17,7 @@ func (s *NullKinesisService) GetShardIterator(*kinesis.GetShardIteratorInput) (*
 }
 
 func (s *NullKinesisService) GetRecords(*kinesis.GetRecordsInput) (*kinesis.GetRecordsOutput, error) {
-	rec := &kinesis.Record{}
-	records := []*kinesis.Record{rec}
+	records := []*kinesis.Record{}
 	gso := &kinesis.GetRecordsOutput{
 		NextShardIterator:  aws.String("124"),
 		MillisBehindLatest: aws.Int64(0),
@@ -87,8 +86,16 @@ func TestStreamWait(t *testing.T) {
 }
 
 func TestFetchMoreRecords(t *testing.T) {
-	svc := NullKinesisService{}
-	s := NewShardStreamReader(&svc, "test-stream", "shard-0000")
+	svc := newTestKinesisService()
+	st := newTestKinesisStream("test-stream")
+	s1 := newTestKinesisShard()
+
+	r1 := make(map[string]interface{})
+	s1.AddRecord(SequenceNumber("a"), r1)
+	st.AddShard("shard-0000", s1)
+	svc.AddStream(st)
+
+	s := NewShardStreamReader(svc, "test-stream", "shard-0000")
 
 	err := s.fetchMoreRecords()
 	if err != nil {
@@ -102,8 +109,16 @@ func TestFetchMoreRecords(t *testing.T) {
 }
 
 func TestRead(t *testing.T) {
-	svc := NullKinesisService{}
-	s := NewShardStreamReader(&svc, "test-stream", "shard-0000")
+	svc := newTestKinesisService()
+	st := newTestKinesisStream("test-stream")
+	s1 := newTestKinesisShard()
+
+	r1 := make(map[string]interface{})
+	s1.AddRecord(SequenceNumber("a"), r1)
+	st.AddShard("shard-0000", s1)
+	svc.AddStream(st)
+
+	s := NewShardStreamReader(svc, "test-stream", "shard-0000")
 
 	r, err := s.Get()
 	if err != nil {

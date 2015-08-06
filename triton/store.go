@@ -18,19 +18,15 @@ type CheckpointService interface {
 
 // A store manages buffering records together into files, and uploading them somewhere.
 type Store struct {
-	streamName string
-	shardID    string
+	name   string
+	reader StreamReader
 
 	// Our uploaders manages sending our datafiles somewhere
 	uploader *S3Uploader
 
-	// A Checkpointer stores what records have be committed to our uploader
-	checkpointer CheckpointService
-
-	currentLogTime     time.Time
-	currentWriter      io.WriteCloser
-	currentFilename    *string
-	lastSequenceNumber string
+	currentLogTime  time.Time
+	currentWriter   io.WriteCloser
+	currentFilename *string
 
 	buf *bytes.Buffer
 }
@@ -68,21 +64,7 @@ func (s *Store) closeWriter() error {
 
 		s.currentFilename = nil
 
-		// Now that we've successfully uploaded the data, we can checkpoint
-		// this write.
-		if s.checkpointer != nil {
-			if len(s.lastSequenceNumber) > 0 {
-				err = s.checkpointer.Checkpoint(s.lastSequenceNumber)
-				if err != nil {
-					log.Println("Failed to checkpoint:", err)
-					return fmt.Errorf("Failed to checkpoint store")
-				}
-			} else {
-				log.Println("Empty checkpoint")
-			}
-		}
-
-		s.lastSequenceNumber = ""
+		s.reader.Checkpoint()
 	}
 
 	return nil
@@ -107,7 +89,7 @@ func (s *Store) openWriter(fname string) (err error) {
 }
 
 func (s *Store) generateFilename() (name string) {
-	name = fmt.Sprintf("%s-%s.tri", s.streamName, s.shardID)
+	name = fmt.Sprintf("%s.tri", s.name)
 
 	return
 }
@@ -116,7 +98,7 @@ func (s *Store) generateKeyname() (name string) {
 	day_s := s.currentLogTime.Format("20060102")
 	ts_s := fmt.Sprintf("%d", s.currentLogTime.Unix())
 
-	name = fmt.Sprintf("%s/%s-%s-%s.tri", day_s, s.streamName, s.shardID, ts_s)
+	name = fmt.Sprintf("%s/%s-%s.tri", day_s, s.name, ts_s)
 
 	return
 }
@@ -143,7 +125,6 @@ func (s *Store) getCurrentWriter() (w io.Writer, err error) {
 }
 
 func (s *Store) flushBuffer() (err error) {
-
 	if s.currentWriter == nil {
 		return fmt.Errorf("Flush without a current buffer")
 	}
@@ -179,9 +160,6 @@ func (s *Store) Put(b []byte) (err error) {
 
 func (s *Store) PutRecord(r *kinesis.Record) (err error) {
 	err = s.Put(r.Data)
-	if err == nil {
-		s.lastSequenceNumber = *r.SequenceNumber
-	}
 	return
 }
 
@@ -192,16 +170,15 @@ func (s *Store) Close() (err error) {
 
 const BUFFER_SIZE int = 1024 * 1024
 
-func NewStore(streamName, shardID string, up *S3Uploader, checkpointer CheckpointService) (s *Store) {
+func NewStore(name string, r StreamReader, up *S3Uploader) (s *Store) {
 	b := make([]byte, 0, BUFFER_SIZE)
 	buf := bytes.NewBuffer(b)
 
 	s = &Store{
-		streamName:   streamName,
-		shardID:      shardID,
-		buf:          buf,
-		uploader:     up,
-		checkpointer: checkpointer,
+		name:     name,
+		reader:   r,
+		buf:      buf,
+		uploader: up,
 	}
 
 	return

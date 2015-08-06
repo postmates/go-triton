@@ -2,6 +2,7 @@ package triton
 
 import (
 	"bytes"
+	"io"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -10,31 +11,40 @@ import (
 	"github.com/golang/snappy"
 )
 
-func TestNewStore(t *testing.T) {
-	NewStore("test-stream", "0001", nil, nil)
+type nullStreamReader struct{}
+
+func (nsr *nullStreamReader) ReadRecord() (map[string]interface{}, error) {
+	return nil, io.EOF
+}
+
+func (nsr *nullStreamReader) Checkpoint() error {
+	return nil
+}
+
+func (nsr *nullStreamReader) Stop() {
 }
 
 func TestGenerateFilename(t *testing.T) {
-	s := NewStore("test_stream", "0001", nil, nil)
+	s := NewStore("test", nil, nil)
 
 	fname := s.generateFilename()
-	if fname != "test_stream-0001.tri" {
+	if fname != "test.tri" {
 		t.Errorf("Bad file file %v", fname)
 	}
 }
 
 func TestGenerateKeyname(t *testing.T) {
-	s := NewStore("test_stream", "0001", nil, nil)
+	s := NewStore("test", nil, nil)
 
 	s.currentLogTime = time.Date(2015, 6, 30, 2, 45, 0, 0, time.UTC)
 	name := s.generateKeyname()
-	if name != "20150630/test_stream-0001-1435632300.tri" {
+	if name != "20150630/test-1435632300.tri" {
 		t.Errorf("Bad file file %v", name)
 	}
 }
 
 func TestOpenWriter(t *testing.T) {
-	s := NewStore("test_stream", "0001", nil, nil)
+	s := NewStore("test", nil, nil)
 
 	w, err := s.getCurrentWriter()
 	if err != nil {
@@ -52,7 +62,7 @@ func TestOpenWriter(t *testing.T) {
 }
 
 func TestOpenAndCloseWriter(t *testing.T) {
-	s := NewStore("test_stream", "0001", nil, nil)
+	s := NewStore("test", &nullStreamReader{}, nil)
 
 	_, err := s.getCurrentWriter()
 	if err != nil {
@@ -72,7 +82,7 @@ func TestOpenAndCloseWriter(t *testing.T) {
 }
 
 func TestPut(t *testing.T) {
-	s := NewStore("test_stream", "0001", nil, nil)
+	s := NewStore("test", &nullStreamReader{}, nil)
 
 	testData := []byte{0x01, 0x02, 0x03}
 
