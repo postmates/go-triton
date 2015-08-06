@@ -68,8 +68,6 @@ func TestNewStreamReader(t *testing.T) {
 
 	sr.Checkpoint()
 
-	sr.Stop()
-
 	c1, err := c.LastSequenceNumber(ShardID("0"))
 	if c1 != SequenceNumber("a") {
 		t.Error("Bad sequence number", c1)
@@ -79,4 +77,6 @@ func TestNewStreamReader(t *testing.T) {
 	if c2 != SequenceNumber("b") {
 		t.Error("Bad sequence number", c2)
 	}
+
+	sr.Stop()
 }

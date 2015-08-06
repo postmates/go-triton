@@ -20,18 +20,21 @@ type StreamReader interface {
 }
 
 type multiShardStreamReader struct {
-	readers   []*ShardStreamReader
-	recStream chan map[string]interface{}
-	allWg     sync.WaitGroup
-	done      chan struct{}
-	quit      chan struct{}
+	checkpointer Checkpointer
+	readers      []*ShardStreamReader
+	recStream    chan map[string]interface{}
+	allWg        sync.WaitGroup
+	done         chan struct{}
+	quit         chan struct{}
 }
 
 func (msr *multiShardStreamReader) Checkpoint() (err error) {
-	// NOTE: Need to sort out what the last point is, because the record we
-	// pull from the underlying stream may never have been delivered to the
-	// consumer.
-	return fmt.Errorf("not implemented")
+	for _, r := range msr.readers {
+		if r.LastSequenceNumber != nil {
+			err = msr.checkpointer.Checkpoint(r.ShardID, *r.LastSequenceNumber)
+		}
+	}
+	return
 }
 
 func (msr *multiShardStreamReader) ReadRecord() (rec map[string]interface{}, err error) {
@@ -53,6 +56,7 @@ const maxShards int = 100
 
 func NewStreamReader(svc KinesisService, streamName string, c Checkpointer) (sr StreamReader, err error) {
 	msr := multiShardStreamReader{
+		c,
 		make([]*ShardStreamReader, 0),
 		make(chan map[string]interface{}),
 		sync.WaitGroup{},
@@ -77,9 +81,20 @@ func NewStreamReader(svc KinesisService, streamName string, c Checkpointer) (sr 
 	}
 
 	for _, sid := range shards {
-		go func(sid ShardID) {
-			shardStream := NewShardStreamReader(svc, streamName, sid)
+		sn, err := c.LastSequenceNumber(sid)
+		if err != nil {
+			return nil, err
+		}
+		var shardStream *ShardStreamReader
+		if sn == "" {
+			shardStream = NewShardStreamReader(svc, streamName, sid)
+		} else {
+			shardStream = NewShardStreamReaderFromSequence(svc, streamName, sid, sn)
+		}
 
+		msr.readers = append(msr.readers, shardStream)
+
+		go func(shardStream *ShardStreamReader) {
 			msr.allWg.Add(1)
 			defer msr.allWg.Done()
 
@@ -87,7 +102,7 @@ func NewStreamReader(svc KinesisService, streamName string, c Checkpointer) (sr 
 			processStreamToChan(shardStream, msr.recStream, msr.done)
 
 			msr.quit <- struct{}{}
-		}(sid)
+		}(shardStream)
 	}
 
 	go func() {
@@ -111,7 +126,6 @@ func processStreamToChan(r *ShardStreamReader, recChan chan map[string]interface
 		default:
 		}
 
-		log.Println("Get")
 		kRec, err := r.Get()
 		if err != nil {
 			log.Println("Error reading record", err)

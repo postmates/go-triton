@@ -112,6 +112,14 @@ func (s *ShardStreamReader) Get() (r *kinesis.Record, err error) {
 	if len(s.records) > 0 {
 		r := s.records[0]
 		s.records = s.records[1:]
+
+		if r.SequenceNumber == nil {
+			panic("missing sequence number")
+		}
+
+		sn := SequenceNumber(*r.SequenceNumber)
+		s.LastSequenceNumber = &sn
+
 		return r, nil
 	} else {
 		return nil, nil
