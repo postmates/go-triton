@@ -98,7 +98,7 @@ func NewStreamReader(svc KinesisService, streamName string, c Checkpointer) (sr 
 			msr.allWg.Add(1)
 			defer msr.allWg.Done()
 
-			log.Printf("Starting stream processing for %s:%s", streamName, sid)
+			log.Printf("Starting stream processing for %s:%s", shardStream.StreamName, shardStream.ShardID)
 			processStreamToChan(shardStream, msr.recStream, msr.done)
 
 			msr.quit <- struct{}{}

@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
@@ -75,146 +74,57 @@ func openDB(db_url_s string) (db *sql.DB) {
 	}
 }
 
-// Loop on records read from the stream, send it to the store.
-// Provided signal channel will tell us when to quit.
-func loopStream(stream *triton.Stream, store *triton.Store, quit chan bool) {
-	logTime := time.Now()
-	recCount := 0
-
-	defer store.Close()
-
-	for {
-		if time.Since(logTime) >= LOG_INTERVAL {
-			log.Printf("Recorded %d records for (%s, %s)", recCount, stream.StreamName, stream.ShardID)
-			logTime = time.Now()
-			recCount = 0
-		}
-
-		r, err := stream.Read()
-		if err != nil {
-			log.Printf("Failed to read from (%s, %s): %v", stream.StreamName, stream.ShardID, err)
-			return
-		}
-
-		if r == nil {
-			log.Printf("r for (%s, %s) is nil?", stream.StreamName, stream.ShardID)
-			return
-		}
-
-		recCount += 1
-		err = store.PutRecord(r)
-		if err != nil {
-			log.Println("Failed to put record:", err)
-			return
-		}
-
-		select {
-		case <-quit:
-			log.Printf("Quit signal received for (%s, %s)", stream.StreamName, stream.ShardID)
-			return
-		default:
-			continue
-		}
-	}
-}
-
-func storeShard(sc *triton.StreamConfig, shardID string, bucketName string, skipToLatest bool, db *sql.DB, quitChan chan bool) {
-	ksvc := kinesis.New(&aws.Config{Region: aws.String(sc.RegionName)})
-
-	c, err := triton.NewCheckpointer("triton-store", sc.StreamName, shardID, db)
-	if err != nil {
-		log.Println("Failed to open Checkpointer", err)
-		return
-	}
-
-	seqNum, err := c.LastSequenceNumber()
-	if err != nil {
-		log.Println("Failed to load last sequence number", err)
-		return
-	}
-
-	var stream *triton.Stream
-	if !skipToLatest && len(seqNum) > 0 {
-		log.Printf("Opening stream %s-%s at %s", sc.StreamName, shardID, seqNum)
-		stream = triton.NewStreamFromSequence(ksvc, sc.StreamName, shardID, seqNum)
-	} else {
-		log.Printf("Opening stream %s-%s at LATEST", sc.StreamName, shardID)
-		stream = triton.NewStream(ksvc, sc.StreamName, shardID)
-	}
-
-	s3_svc := s3.New(&aws.Config{Region: aws.String(sc.RegionName)})
-	u := triton.NewUploader(s3_svc, bucketName)
-
-	store := triton.NewStore(sc.StreamName, shardID, u, c)
-
-	loopStream(stream, store, quitChan)
-}
-
 // Store Command
-// Spin up go routine for each of our shards and store the data in S3
 //
 // NOTE: for now we're planning on having a single process handle all our
 // shards.  In the future, as this thing scales, it will probably be convinient
 // to have command line arguments to indicate which shards we should process.
 func store(streamName, bucketName string, dbUrl string, skipToLatest bool) {
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-
 	sc := openStreamConfig(streamName)
 
-	ksvc := kinesis.New(&aws.Config{Region: aws.String(sc.RegionName)})
+	config := aws.NewConfig().WithRegion(sc.RegionName)
+	kSvc := kinesis.New(config)
+	s3Svc := s3.New(config)
 
 	db := openDB(dbUrl)
 	defer db.Close()
 
-	shards, err := triton.ListShards(ksvc, sc.StreamName)
+	c, err := triton.NewCheckpointer("triton-store", sc.StreamName, db)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Error listing shards", err)
-		os.Exit(1)
+		log.Println("Failed to open Checkpointer", err)
+		return
 	}
 
-	var wg sync.WaitGroup
-
-	anyQuit := make(chan bool, 1)
-	quitChans := make([]chan bool, 0, 10)
-	for _, shardID := range shards {
-		quitChan := make(chan bool, 1)
-		quitChans = append(quitChans, quitChan)
-
-		wg.Add(1)
-
-		go func(shardID string, qc chan bool) {
-			storeShard(sc, shardID, bucketName, skipToLatest, db, qc)
-
-			// The order is important here, because anyQuit isn't a big
-			// channel, it could block.
-			wg.Done()
-
-			anyQuit <- true
-		}(shardID, quitChan)
+	if skipToLatest {
+		// TODO: Reset checkpointer
 	}
 
-	// Channel logic
-	// Basically we have a couple of conditions that can cause us to exit.
-	// 1. We received an os signal to stop
-	// 2. Any of our worker routines quit
-	//
-	// Once we've decided to stop, we want to tell all our workers to quit,
-	// then wait for them to do so.
-	select {
-	case <-sigs:
-		break
-	case <-anyQuit:
-		break
+	stream, err := triton.NewStreamReader(kSvc, sc.StreamName, c)
+
+	u := triton.NewUploader(s3Svc, bucketName)
+
+	// TODO: Maybe a configurable prefix (prod vs. stage for example)
+	storeName := fmt.Sprintf("%s-store", sc.StreamName)
+	store := triton.NewStore(storeName, stream, u)
+
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		select {
+		case <-sigs:
+			stream.Stop()
+			return
+		}
+	}()
+
+	// Blocks till EOF
+	err = store.Store()
+	if err != nil {
+		log.Fatalln("Error during store:", err)
 	}
 
-	log.Println("Quitting")
-	for _, c := range quitChans {
-		c <- true
-	}
-
-	log.Println("Waiting for workers to exit")
-	wg.Wait()
+	store.Close()
 
 	log.Println("Done")
 }
@@ -364,7 +274,7 @@ func main() {
 
 				sc := openStreamConfig(c.String("stream"))
 
-				set, err := triton.NewArchiveSet(c.String("bucket"), sc.StreamName, start, end, s3Svc)
+				set, err := triton.NewStoreReader(s3Svc, c.String("bucket"), sc.StreamName, start, end)
 				if err != nil {
 					log.Fatalln("Failure listing archive:", err)
 				}

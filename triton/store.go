@@ -8,8 +8,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/golang/snappy"
+	"github.com/tinylib/msgp/msgp"
 )
 
 type CheckpointService interface {
@@ -141,6 +141,18 @@ func (s *Store) flushBuffer() (err error) {
 	return
 }
 
+func (s *Store) PutRecord(rec map[string]interface{}) (err error) {
+	// TODO: Looks re-usable
+	b := make([]byte, 0, 1024)
+	b, err = msgp.AppendMapStrIntf(b, rec)
+	if err != nil {
+		return
+	}
+
+	err = s.Put(b)
+	return
+}
+
 func (s *Store) Put(b []byte) (err error) {
 	// We get the current writer here, even though we're not using it directly.
 	// This might trigger a log rotation and flush based on time.
@@ -158,14 +170,32 @@ func (s *Store) Put(b []byte) (err error) {
 	return
 }
 
-func (s *Store) PutRecord(r *kinesis.Record) (err error) {
-	err = s.Put(r.Data)
-	return
-}
-
 func (s *Store) Close() (err error) {
 	err = s.closeWriter()
 	return
+}
+
+func (s *Store) Store() (err error) {
+	for {
+		// TODO: We're unmarshalling and then marshalling msgpack here when
+		// there is not real reason except that's a more useful general
+		// interface.  We should add another that is ReadRaw
+		rec, err := s.reader.ReadRecord()
+		if err != nil {
+			if err == io.EOF {
+				break
+			} else {
+				return err
+			}
+		}
+
+		err = s.PutRecord(rec)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 const BUFFER_SIZE int = 1024 * 1024
