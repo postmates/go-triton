@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -196,6 +197,12 @@ func main() {
 					os.Exit(1)
 				}
 
+				if strings.Contains(c.String("client-name"), "-") {
+					fmt.Fprintln(os.Stderr, "client name cannot contain a -")
+					cli.ShowSubcommandHelp(c)
+					os.Exit(1)
+				}
+
 				store(c.String("client-name"), c.String("stream"), c.String("bucket"), c.String("snapshot-db"), c.Bool("skip-to-latest"))
 			},
 		},
@@ -237,6 +244,12 @@ func main() {
 				cli.StringFlag{
 					Name:  "end-date",
 					Usage: "(optional) Date to stop streaming from YYYYMMDD",
+				},
+				cli.StringFlag{
+					Name:   "client-name",
+					Usage:  "optional name of triton client. Defaults to any",
+					Value:  "",
+					EnvVar: "TRITON_CLIENT",
 				}},
 			Action: func(c *cli.Context) {
 				if c.String("stream") == "" {
@@ -279,7 +292,7 @@ func main() {
 
 				sc := openStreamConfig(c.String("stream"))
 
-				set, err := triton.NewStoreReader(s3Svc, c.String("bucket"), sc.StreamName, start, end)
+				set, err := triton.NewStoreReader(s3Svc, c.String("bucket"), c.String("client-name"), sc.StreamName, start, end)
 				if err != nil {
 					log.Fatalln("Failure listing archive:", err)
 				}

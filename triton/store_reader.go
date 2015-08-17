@@ -27,13 +27,16 @@ func listDatesFromRange(start, end time.Time) (dates []time.Time) {
 	return
 }
 
-func NewStoreReader(svc S3Service, bucketName, streamName string, startDate, endDate time.Time) (Reader, error) {
+func NewStoreReader(svc S3Service, bucketName, clientName, streamName string, startDate, endDate time.Time) (Reader, error) {
 	allDates := listDatesFromRange(startDate, endDate)
 	readers := make([]Reader, 0, len(allDates))
 
 	for _, date := range allDates {
 		dateStr := date.Format("20060102")
 		prefix := fmt.Sprintf("%s/%s-", dateStr, streamName)
+		if clientName != "" {
+			prefix = fmt.Sprintf("%s%s-", prefix, clientName)
+		}
 		resp, err := svc.ListObjects(&s3.ListObjectsInput{
 			Bucket: aws.String(bucketName),
 			Prefix: aws.String(prefix),
@@ -43,11 +46,11 @@ func NewStoreReader(svc S3Service, bucketName, streamName string, startDate, end
 			return nil, err
 		}
 
-		// TODO: sorting, archive vs. shard
+		// TODO: sorting
 		for _, o := range resp.Contents {
 			sa, err := NewStoreArchive(bucketName, *o.Key, svc)
 			if err != nil {
-				log.Println("Failed to parse contents", *o.Key)
+				log.Println("Failed to parse contents", *o.Key, err)
 				continue
 			}
 

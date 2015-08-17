@@ -3,6 +3,7 @@ package triton
 import (
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -14,7 +15,7 @@ type StoreArchive struct {
 	StreamName string
 	Bucket     string
 	Key        string
-	Shard      string
+	ClientName string
 
 	T         time.Time
 	SortValue int
@@ -56,16 +57,12 @@ func (sa *StoreArchive) parseKeyName(keyName string) (err error) {
 		return fmt.Errorf("Failed to parse sort value")
 	}
 
-	nameRe := regexp.MustCompile(`(.+)-(archive|shardId-\d+)`)
-	nameRes := nameRe.FindAllStringSubmatch(res[0][2], -1)
-	if len(nameRes) != 1 {
-		return fmt.Errorf("Failure parsing stream name: %v", nameRes)
+	nameParts := strings.Split(res[0][2], "-")
+	if len(nameParts) != 2 {
+		return fmt.Errorf("Failure parsing stream name: %v", res[0][2])
 	}
-	if nameRes[0][2] != "archive" {
-		sa.Shard = nameRes[0][2]
-	}
-
-	sa.StreamName = nameRes[0][1]
+	sa.StreamName = nameParts[0]
+	sa.ClientName = nameParts[1]
 
 	return
 }
