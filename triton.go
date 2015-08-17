@@ -79,7 +79,7 @@ func openDB(db_url_s string) (db *sql.DB) {
 // NOTE: for now we're planning on having a single process handle all our
 // shards.  In the future, as this thing scales, it will probably be convinient
 // to have command line arguments to indicate which shards we should process.
-func store(streamName, bucketName string, dbUrl string, skipToLatest bool) {
+func store(clientName, streamName, bucketName string, dbUrl string, skipToLatest bool) {
 	sc := openStreamConfig(streamName)
 
 	config := aws.NewConfig().WithRegion(sc.RegionName)
@@ -89,7 +89,7 @@ func store(streamName, bucketName string, dbUrl string, skipToLatest bool) {
 	db := openDB(dbUrl)
 	defer db.Close()
 
-	c, err := triton.NewCheckpointer("triton-store", sc.StreamName, db)
+	c, err := triton.NewCheckpointer(clientName, sc.StreamName, db)
 	if err != nil {
 		log.Println("Failed to open Checkpointer", err)
 		return
@@ -103,8 +103,7 @@ func store(streamName, bucketName string, dbUrl string, skipToLatest bool) {
 
 	u := triton.NewUploader(s3Svc, bucketName)
 
-	// TODO: Maybe a configurable prefix (prod vs. stage for example)
-	storeName := fmt.Sprintf("%s-store", sc.StreamName)
+	storeName := fmt.Sprintf("%s-%s", sc.StreamName, clientName)
 	store := triton.NewStore(storeName, stream, u)
 
 	sigs := make(chan os.Signal, 1)
@@ -177,6 +176,12 @@ func main() {
 					Value:  "sqlite://triton.db",
 					EnvVar: "TRITON_DB",
 				},
+				cli.StringFlag{
+					Name:   "client-name",
+					Usage:  "optional name of triton client",
+					Value:  "store",
+					EnvVar: "TRITON_CLIENT",
+				},
 			},
 			Action: func(c *cli.Context) {
 				if c.String("bucket") == "" {
@@ -191,7 +196,7 @@ func main() {
 					os.Exit(1)
 				}
 
-				store(c.String("stream"), c.String("bucket"), c.String("snapshot-db"), c.Bool("skip-to-latest"))
+				store(c.String("client-name"), c.String("stream"), c.String("bucket"), c.String("snapshot-db"), c.Bool("skip-to-latest"))
 			},
 		},
 		{
