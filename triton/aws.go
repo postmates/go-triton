@@ -1,6 +1,9 @@
 package triton
 
 import (
+	"bytes"
+	"io/ioutil"
+
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -33,6 +36,8 @@ type nullS3Service struct{}
 
 func (s *nullS3Service) GetObject(*s3.GetObjectInput) (*s3.GetObjectOutput, error) {
 	goo := &s3.GetObjectOutput{}
+	buf := bytes.NewBuffer(make([]byte, 0))
+	goo.Body = ioutil.NopCloser(buf)
 	return goo, nil
 }
 

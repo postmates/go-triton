@@ -17,8 +17,7 @@ func (s *NullKinesisService) GetShardIterator(*kinesis.GetShardIteratorInput) (*
 }
 
 func (s *NullKinesisService) GetRecords(*kinesis.GetRecordsInput) (*kinesis.GetRecordsOutput, error) {
-	rec := &kinesis.Record{}
-	records := []*kinesis.Record{rec}
+	records := []*kinesis.Record{}
 	gso := &kinesis.GetRecordsOutput{
 		NextShardIterator:  aws.String("124"),
 		MillisBehindLatest: aws.Int64(0),
@@ -31,15 +30,15 @@ func (s *NullKinesisService) DescribeStream(input *kinesis.DescribeStreamInput) 
 	return nil, fmt.Errorf("Not Implemented")
 }
 
-func TestNewStream(t *testing.T) {
+func TestNewShardStreamReader(t *testing.T) {
 	svc := NullKinesisService{}
 
-	s := NewStream(&svc, "test-stream", "shard-0001")
+	s := NewShardStreamReader(&svc, "test-stream", "shard-0001")
 	if s.StreamName != "test-stream" {
 		t.Errorf("bad stream name")
 	}
 
-	if s.ShardID != "shard-0001" {
+	if s.ShardID != ShardID("shard-0001") {
 		t.Errorf("bad ShardID")
 	}
 
@@ -48,10 +47,10 @@ func TestNewStream(t *testing.T) {
 	}
 }
 
-func TestNewStreamFromSequence(t *testing.T) {
+func TestNewShardStreamReaderFromSequence(t *testing.T) {
 	svc := NullKinesisService{}
 
-	s := NewStreamFromSequence(&svc, "test-stream", "shard-0001", "abc123")
+	s := NewShardStreamReaderFromSequence(&svc, "test-stream", "shard-0001", "abc123")
 	if s.StreamName != "test-stream" {
 		t.Errorf("bad stream name")
 	}
@@ -71,7 +70,7 @@ func TestNewStreamFromSequence(t *testing.T) {
 
 func TestStreamWait(t *testing.T) {
 	svc := NullKinesisService{}
-	s := NewStream(&svc, "test-stream", "shard-0000")
+	s := NewShardStreamReader(&svc, "test-stream", "shard-0000")
 
 	n := time.Now()
 	s.wait(100 * time.Millisecond)
@@ -87,8 +86,16 @@ func TestStreamWait(t *testing.T) {
 }
 
 func TestFetchMoreRecords(t *testing.T) {
-	svc := NullKinesisService{}
-	s := NewStream(&svc, "test-stream", "shard-0000")
+	svc := newTestKinesisService()
+	st := newTestKinesisStream("test-stream")
+	s1 := newTestKinesisShard()
+
+	r1 := make(map[string]interface{})
+	s1.AddRecord(SequenceNumber("a"), r1)
+	st.AddShard("shard-0000", s1)
+	svc.AddStream(st)
+
+	s := NewShardStreamReader(svc, "test-stream", "shard-0000")
 
 	err := s.fetchMoreRecords()
 	if err != nil {
@@ -102,10 +109,18 @@ func TestFetchMoreRecords(t *testing.T) {
 }
 
 func TestRead(t *testing.T) {
-	svc := NullKinesisService{}
-	s := NewStream(&svc, "test-stream", "shard-0000")
+	svc := newTestKinesisService()
+	st := newTestKinesisStream("test-stream")
+	s1 := newTestKinesisShard()
 
-	r, err := s.Read()
+	r1 := make(map[string]interface{})
+	s1.AddRecord(SequenceNumber("a"), r1)
+	st.AddShard("shard-0000", s1)
+	svc.AddStream(st)
+
+	s := NewShardStreamReader(svc, "test-stream", "shard-0000")
+
+	r, err := s.Get()
 	if err != nil {
 		t.Errorf("Received error %v", err)
 		return
@@ -113,5 +128,36 @@ func TestRead(t *testing.T) {
 
 	if r == nil {
 		t.Errorf("Should be a record")
+	}
+}
+
+func TestListShards(t *testing.T) {
+	svc := newTestKinesisService()
+	st := newTestKinesisStream("test-stream")
+
+	s1 := newTestKinesisShard()
+	st.AddShard(ShardID("0"), s1)
+
+	s2 := newTestKinesisShard()
+	st.AddShard(ShardID("1"), s2)
+
+	svc.AddStream(st)
+
+	shards, err := ListShards(svc, "test-stream")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if len(shards) != 2 {
+		t.Error("Failed to find 2 shards:", len(shards))
+		return
+	}
+
+	if shards[0] != ShardID("0") {
+		t.Error("Failed to identify shard 0")
+	}
+
+	if shards[1] != ShardID("1") {
+		t.Error("Failed to identify shard 1")
 	}
 }

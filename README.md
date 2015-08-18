@@ -45,9 +45,9 @@ This combination is good tradeoff between flexibility and performance.
 
 Archive files in S3 are organized by date and time. For example:
 
-    20150710/user_activity_prod-shardId-000000000000-1436553581.tri
+    20150710/user_activity_prod-store-1436553581.tri
 
-This indicates the stream `user_activity_prod`, shard `shardId-000000000`
+This indicates the stream `user_activity_prod`, triton client `mystore`
 stored at unix timestamp `1436553581`. 
 
 The date and time specify when the event was processed, not emitted. There is

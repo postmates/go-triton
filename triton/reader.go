@@ -1,30 +1,32 @@
 package triton
 
-import (
-	"io"
-
-	"github.com/golang/snappy"
-	"github.com/tinylib/msgp/msgp"
-)
+import "io"
 
 type Reader interface {
 	ReadRecord() (rec map[string]interface{}, err error)
 }
 
-type IOReader struct {
-	mr *msgp.Reader
+// A SerialReader let's us read from multiple readers, in sequence
+type SerialReader struct {
+	readers []Reader
+	r_idx   int
 }
 
-func (r *IOReader) ReadRecord() (rec map[string]interface{}, err error) {
-	rec = make(map[string]interface{})
+func (sr *SerialReader) ReadRecord() (rec map[string]interface{}, err error) {
+	for sr.r_idx < len(sr.readers) {
+		rec, err := sr.readers[sr.r_idx].ReadRecord()
+		if err != nil {
+			if err == io.EOF {
+				sr.r_idx += 1
+			}
+		} else {
+			return rec, nil
+		}
+	}
 
-	err = r.mr.ReadMapStrIntf(rec)
-	return
+	return nil, io.EOF
 }
 
-func NewReader(ir io.Reader) (or Reader) {
-	sr := snappy.NewReader(ir)
-	mr := msgp.NewReader(sr)
-
-	return &IOReader{mr}
+func NewSerialReader(readers []Reader) Reader {
+	return &SerialReader{readers, 0}
 }
