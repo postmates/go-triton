@@ -37,7 +37,7 @@ const MIN_POLL_INTERVAL = 1.0 * time.Second
 func (s *ShardStreamReader) initIterator() (err error) {
 	gsi := kinesis.GetShardIteratorInput{
 		StreamName:        aws.String(s.StreamName),
-		ShardID:           aws.String(string(s.ShardID)),
+		ShardId:           aws.String(string(s.ShardID)),
 		ShardIteratorType: aws.String(s.ShardIteratorType),
 	}
 
@@ -176,7 +176,7 @@ func PickShardID(svc KinesisService, streamName string, shardNum int) (sid Shard
 		return
 	}
 
-	sid = ShardID(*resp.StreamDescription.Shards[shardNum].ShardID)
+	sid = ShardID(*resp.StreamDescription.Shards[shardNum].ShardId)
 	return
 }
 
@@ -187,7 +187,7 @@ func ListShards(svc KinesisService, streamName string) (shards []ShardID, err er
 	}
 
 	for _, s := range resp.StreamDescription.Shards {
-		shards = append(shards, ShardID(*s.ShardID))
+		shards = append(shards, ShardID(*s.ShardId))
 	}
 
 	return

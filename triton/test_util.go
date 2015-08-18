@@ -68,7 +68,7 @@ func parseIterator(iterVal string) (string, string, string) {
 }
 
 func (s *testKinesisService) GetShardIterator(i *kinesis.GetShardIteratorInput) (*kinesis.GetShardIteratorOutput, error) {
-	iterVal := fmt.Sprintf("%s:%s:%s", *i.StreamName, *i.ShardID, "")
+	iterVal := fmt.Sprintf("%s:%s:%s", *i.StreamName, *i.ShardId, "")
 	gso := &kinesis.GetShardIteratorOutput{ShardIterator: aws.String(iterVal)}
 	return gso, nil
 }
@@ -126,7 +126,7 @@ func (s *testKinesisService) DescribeStream(input *kinesis.DescribeStreamInput) 
 	}
 
 	for sid, _ := range stream.shards {
-		shards = append(shards, &kinesis.Shard{ShardID: aws.String(string(sid))})
+		shards = append(shards, &kinesis.Shard{ShardId: aws.String(string(sid))})
 	}
 
 	dso := &kinesis.DescribeStreamOutput{
