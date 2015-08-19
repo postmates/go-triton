@@ -153,11 +153,21 @@ func TestListShards(t *testing.T) {
 		return
 	}
 
-	if shards[0] != ShardID("0") {
-		t.Error("Failed to identify shard 0")
+	found0 := false
+	found1 := false
+
+	for _, sid := range shards {
+		if sid == ShardID("0") {
+			found0 = true
+		} else if sid == ShardID("1") {
+			found1 = true
+		}
 	}
 
-	if shards[1] != ShardID("1") {
+	if !found0 {
+		t.Error("Failed to identify shard 0")
+	}
+	if !found1 {
 		t.Error("Failed to identify shard 1")
 	}
 }
