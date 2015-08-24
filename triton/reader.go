@@ -17,6 +17,7 @@ func (sr *SerialReader) ReadRecord() (rec map[string]interface{}, err error) {
 		rec, err = sr.readers[sr.r_idx].ReadRecord()
 		if err != nil {
 			if err == io.EOF {
+				log.Println("Archive complete. Next...")
 				sr.r_idx += 1
 			} else {
 				return
