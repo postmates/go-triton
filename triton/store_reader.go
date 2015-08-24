@@ -103,8 +103,8 @@ func NewStoreReader(svc S3Service, bucketName, clientName, streamName string, st
 	// Convert to a list of Readers... feels like there should be a better way
 	// here. Is this what generics are for? Or is there an interface for a list?
 	readers := make([]Reader, len(archives))
-	for i, a := range archives {
-		readers[i] = &a
+	for i := range archives {
+		readers[i] = &archives[i]
 	}
 
 	return NewSerialReader(readers), nil
