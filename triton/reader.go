@@ -14,10 +14,12 @@ type SerialReader struct {
 
 func (sr *SerialReader) ReadRecord() (rec map[string]interface{}, err error) {
 	for sr.r_idx < len(sr.readers) {
-		rec, err := sr.readers[sr.r_idx].ReadRecord()
+		rec, err = sr.readers[sr.r_idx].ReadRecord()
 		if err != nil {
 			if err == io.EOF {
 				sr.r_idx += 1
+			} else {
+				return
 			}
 		} else {
 			return rec, nil

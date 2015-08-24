@@ -71,6 +71,7 @@ func NewStoreReader(svc S3Service, bucketName, clientName, streamName string, st
 		}
 
 		for _, o := range resp.Contents {
+			log.Println("Opening store archive", *o.Key)
 			sa, err := NewStoreArchive(bucketName, *o.Key, svc)
 			if err != nil {
 				log.Println("Failed to parse contents", *o.Key, err)
