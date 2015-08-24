@@ -21,8 +21,8 @@ func listDatesFromRange(start, end time.Time) (dates []time.Time) {
 
 	dates = append(dates, current)
 	for !current.Equal(end) {
-		dates = append(dates, current)
 		current = current.Add(day)
+		dates = append(dates, current)
 	}
 
 	return
@@ -102,9 +102,9 @@ func NewStoreReader(svc S3Service, bucketName, clientName, streamName string, st
 
 	// Convert to a list of Readers... feels like there should be a better way
 	// here. Is this what generics are for? Or is there an interface for a list?
-	readers := make([]Reader, 0, len(archives))
-	for _, a := range archives {
-		readers = append(readers, &a)
+	readers := make([]Reader, len(archives))
+	for i, a := range archives {
+		readers[i] = &a
 	}
 
 	return NewSerialReader(readers), nil
