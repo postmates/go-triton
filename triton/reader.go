@@ -1,6 +1,9 @@
 package triton
 
-import "io"
+import (
+	"io"
+	"log"
+)
 
 type Reader interface {
 	ReadRecord() (rec map[string]interface{}, err error)
