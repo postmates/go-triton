@@ -93,63 +93,68 @@ The command line client in this package also acts as an example client.
 
 Your client application will need to load the configuration to know how to connect to streams. Something like:
 
-
-	f, _ := os.Open("triton.yaml")
-	c, _ := triton.NewConfigFromFile(f)
-	sc, _ := c.ConfigForName("my_stream")
+```Go
+f, _ := os.Open("triton.yaml")
+c, _ := triton.NewConfigFromFile(f)
+sc, _ := c.ConfigForName("my_stream")
+```
 
 ### Streaming from Kinesis ###
 
 A live client would connect to the Kinesis shards and process records like:
 
 
-	kSvc := kinesis.New(config)
+```Go
+kSvc := kinesis.New(config)
 
-	stream, err := triton.NewStreamReader(kSvc, sc.StreamName, nil)
+stream, err := triton.NewStreamReader(kSvc, sc.StreamName, nil)
 
-    for {
-		rec, err := stream.ReadRecord()
-		if err != nil {
-			if err == io.EOF {
-				break
-			} else {
-                panic(err)
-			}
-		}
-
-        b, err := json.Marshal(rec)
-        if err != nil {
+for {
+    rec, err := stream.ReadRecord()
+    if err != nil {
+        if err == io.EOF {
+            break
+        } else {
             panic(err)
         }
-        fmt.Println(string(b))
     }
+
+    b, err := json.Marshal(rec)
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(string(b))
+}
+```
 
 ### Streaming from S3 ###
 
 A very similar API is available for processing from S3:
 
-	s3Svc := s3.New(&aws.Config{Region: aws.String("us-west-1")})
+```Go
+s3Svc := s3.New(&aws.Config{Region: aws.String("us-west-1")})
 
-    start := time.Time(2015, 10, 1, 0, 0, 0, 0, nil)
-    end := time.Time(2015, 11, 1, 0, 0, 0, 0, nil)
-    stream, _ := triton.NewStoreReader(s3Svc, bucketName, "store", sc.StreamName, start, end)
+start := time.Time(2015, 10, 1, 0, 0, 0, 0, nil)
+end := time.Time(2015, 11, 1, 0, 0, 0, 0, nil)
+stream, _ := triton.NewStoreReader(s3Svc, bucketName, "store", sc.StreamName, start, end)
 
-    for {
-        rec, err := stream.ReadRecord()
-        if err != nil {
-            if err == io.EOF {
-                break
-            } else {
-                panic(err)
-            }
-        }
-
-        b, err := json.Marshal(rec)
-        if err != nil {
+for {
+    rec, err := stream.ReadRecord()
+    if err != nil {
+        if err == io.EOF {
+            break
+        } else {
             panic(err)
         }
-        fmt.Println(string(b))
     }
+
+    b, err := json.Marshal(rec)
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(string(b))
+}
+```
 
 
 ### Checkpointing ###
@@ -160,16 +165,18 @@ from where you left off.
 
 By providing a 'Checkpointer' to the StreamReader, you get this extra functionality:
 
-	c, _ := triton.NewCheckpointer("myclient", sc.StreamName, db)
+```Go
+c, _ := triton.NewCheckpointer("myclient", sc.StreamName, db)
 
-	stream, _ := triton.NewStreamReader(kSvc, sc.StreamName, c)
+stream, _ := triton.NewStreamReader(kSvc, sc.StreamName, c)
 
-    for {
-        rec, _ := stream.ReadRecord()
-        stream.Checkpoint()
+for {
+    rec, _ := stream.ReadRecord()
+    stream.Checkpoint()
 
-        ...
-    }
+    ...
+}
+```
 
 
 ### Other Languages ###
