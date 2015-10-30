@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/codegangsta/cli"
@@ -84,8 +85,8 @@ func store(clientName, streamName, bucketName string, dbUrl string, skipToLatest
 	sc := openStreamConfig(streamName)
 
 	config := aws.NewConfig().WithRegion(sc.RegionName)
-	kSvc := kinesis.New(config)
-	s3Svc := s3.New(config)
+	sess := session.New(config)
+	kSvc := kinesis.New(sess)
 
 	db := openDB(dbUrl)
 	defer db.Close()
@@ -102,7 +103,7 @@ func store(clientName, streamName, bucketName string, dbUrl string, skipToLatest
 
 	stream, err := triton.NewStreamReader(kSvc, sc.StreamName, c)
 
-	u := triton.NewUploader(s3Svc, bucketName)
+	u := triton.NewUploader(sess, bucketName)
 
 	storeName := fmt.Sprintf("%s-%s", sc.StreamName, clientName)
 	store := triton.NewStore(storeName, stream, u)
@@ -134,7 +135,8 @@ func store(clientName, streamName, bucketName string, dbUrl string, skipToLatest
 // Just print out a list of shards for the given stream
 func listShards(streamName string) {
 	sc := openStreamConfig(streamName)
-	ksvc := kinesis.New(&aws.Config{Region: aws.String(sc.RegionName)})
+	sess := session.New(&aws.Config{Region: aws.String(sc.RegionName)})
+	ksvc := kinesis.New(sess)
 
 	shards, err := triton.ListShards(ksvc, sc.StreamName)
 	if err != nil {
@@ -271,7 +273,8 @@ func main() {
 				}
 
 				// TODO: configure region
-				s3Svc := s3.New(&aws.Config{Region: aws.String("us-west-1")})
+				sess := session.New(&aws.Config{Region: aws.String("us-west-1")})
+				s3Svc := s3.New(sess)
 
 				start, err := time.Parse("20060102", c.String("start-date"))
 				if err != nil {

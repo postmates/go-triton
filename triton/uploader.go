@@ -8,7 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	//"github.com/aws/aws-sdk-go/aws/awsutil"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/aws/client"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
@@ -45,9 +45,8 @@ func (s *S3Uploader) Upload(fileName, keyName string) (err error) {
 	return
 }
 
-func NewUploader(svc *s3.S3, bucketName string) *S3Uploader {
-	uo := &s3manager.UploadOptions{S3: svc}
-	m := s3manager.NewUploader(uo)
+func NewUploader(c client.ConfigProvider, bucketName string) *S3Uploader {
+	m := s3manager.NewUploader(c)
 
 	u := S3Uploader{
 		uploader:   m,
