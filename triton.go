@@ -130,6 +130,24 @@ func store(clientName, streamName, bucketName string, dbUrl string, skipToLatest
 	log.Println("Done")
 }
 
+// Checkpoint Stats Command
+//
+// Print out stats about recent checkpoints from the requested client
+func checkpointStats(clientName, dbUrl string) {
+	db := openDB(dbUrl)
+	defer db.Close()
+
+	stats, err := triton.GetCheckpointStats(clientName, db)
+	if err != nil {
+		log.Println("Failed to collect stats", err)
+		return
+	}
+
+	for k, v := range stats {
+		fmt.Printf("%s %d\n", k, v)
+	}
+}
+
 // List Shards Command
 //
 // Just print out a list of shards for the given stream
@@ -174,8 +192,8 @@ func main() {
 					Usage: "Skip to latest in stream (ignoring previous checkpoints)",
 				},
 				cli.StringFlag{
-					Name:   "snapshot-db",
-					Usage:  "Database connect string for storign snapshots. Defaults to local sqlite.",
+					Name:   "checkpoint-db",
+					Usage:  "Database connect string for storing checkpoints. Defaults to local sqlite.",
 					Value:  "sqlite://triton.db",
 					EnvVar: "TRITON_DB",
 				},
@@ -205,7 +223,39 @@ func main() {
 					os.Exit(1)
 				}
 
-				store(c.String("client-name"), c.String("stream"), c.String("bucket"), c.String("snapshot-db"), c.Bool("skip-to-latest"))
+				store(c.String("client-name"), c.String("stream"), c.String("bucket"), c.String("checkpoint-db"), c.Bool("skip-to-latest"))
+			},
+		},
+		{
+			Name:  "stats",
+			Usage: "output stats for triton processes",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:   "checkpoint-db",
+					Usage:  "Database connect string for storing checkpoints. Defaults to local sqlite.",
+					Value:  "sqlite://triton.db",
+					EnvVar: "TRITON_DB",
+				},
+				cli.StringFlag{
+					Name:   "client-name",
+					Usage:  "name of triton client",
+					EnvVar: "TRITON_CLIENT",
+				},
+			},
+			Action: func(c *cli.Context) {
+				if c.String("client-name") == "" {
+					fmt.Fprintln(os.Stderr, "missing client name")
+					cli.ShowSubcommandHelp(c)
+					os.Exit(1)
+				}
+
+				if strings.Contains(c.String("client-name"), "-") {
+					fmt.Fprintln(os.Stderr, "client name cannot contain a -")
+					cli.ShowSubcommandHelp(c)
+					os.Exit(1)
+				}
+
+				checkpointStats(c.String("client-name"), c.String("checkpoint-db"))
 			},
 		},
 		{
