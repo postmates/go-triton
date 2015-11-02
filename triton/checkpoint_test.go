@@ -2,7 +2,6 @@ package triton
 
 import (
 	"database/sql"
-	"fmt"
 	"os"
 	"testing"
 
