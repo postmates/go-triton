@@ -125,3 +125,34 @@ func TestEmptyLastSequenceNumber(t *testing.T) {
 		t.Errorf("Should have received empty seq")
 	}
 }
+
+func TestStats(t *testing.T) {
+	db := openTestDB()
+	defer closeTestDB(db)
+
+	sid := ShardID("shardId-0000")
+
+	c, _ := NewCheckpointer("test", "test-stream", db)
+
+	err := c.Checkpoint(sid, "1234")
+	if err != nil {
+		t.Errorf("Failed to checkpoint: %v", err)
+		return
+	}
+
+	stats, err := GetCheckpointStats("test", db)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	v, ok := stats["test.test-stream.shardId-0000.age"]
+	if !ok {
+		t.Errorf("Failed to find value")
+		return
+	}
+
+	if v > 1 || v < 0 {
+		t.Errorf("Bad value, should be basically 0: %d", v)
+	}
+}

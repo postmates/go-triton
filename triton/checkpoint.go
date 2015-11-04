@@ -123,3 +123,29 @@ func NewCheckpointer(clientName string, streamName string, db *sql.DB) (Checkpoi
 
 	return &c, nil
 }
+
+func GetCheckpointStats(clientName string, db *sql.DB) (stat map[string]int64, err error) {
+	stat = make(map[string]int64)
+	rows, err := db.Query("SELECT updated, stream, shard FROM triton_checkpoint WHERE client=$1", clientName)
+	if err != nil {
+		return
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var updated int64
+		var stream, shard string
+
+		err = rows.Scan(&updated, &stream, &shard)
+		if err != nil {
+			return
+		}
+
+		age := time.Now().Unix() - updated
+		statName := fmt.Sprintf("%s.%s.%s.age", clientName, stream, shard)
+		stat[statName] = age
+	}
+
+	return
+}
