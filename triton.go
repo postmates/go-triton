@@ -144,7 +144,7 @@ func checkpointStats(clientName, dbUrl string) {
 	}
 
 	for k, v := range stats {
-		fmt.Printf("%s %d\n", k, v)
+		fmt.Printf("%s %d %d\n", k, v, time.Now().Unix())
 	}
 }
 
