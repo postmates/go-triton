@@ -127,3 +127,10 @@ func TestShardInfo(t *testing.T) {
 	}
 
 }
+
+func BenchmarkShardInfo(b *testing.B) {
+	si := &shardInfo{}
+	for i := 0; i < b.N; i++ {
+		si.noteSequenceNumber("12345")
+	}
+}
