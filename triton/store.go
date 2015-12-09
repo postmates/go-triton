@@ -2,14 +2,16 @@ package triton
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"github.com/golang/snappy"
+	"github.com/skarademir/naturalsort"
+	"github.com/tinylib/msgp/msgp"
 	"io"
 	"log"
 	"os"
+	"sort"
 	"time"
-
-	"github.com/golang/snappy"
-	"github.com/tinylib/msgp/msgp"
 )
 
 type CheckpointService interface {
@@ -18,17 +20,16 @@ type CheckpointService interface {
 
 // A store manages buffering records together into files, and uploading them somewhere.
 type Store struct {
-	name   string
-	reader StreamReader
+	name           string
+	reader         StreamReader
+	streamMetadata *streamMetadata
 
 	// Our uploaders manages sending our datafiles somewhere
-	uploader *S3Uploader
-
+	uploader        *S3Uploader
 	currentLogTime  time.Time
 	currentWriter   io.WriteCloser
 	currentFilename *string
-
-	buf *bytes.Buffer
+	buf             *bytes.Buffer
 }
 
 func (s *Store) closeWriter() error {
@@ -48,7 +49,8 @@ func (s *Store) closeWriter() error {
 		s.currentWriter = nil
 
 		if s.uploader != nil {
-			err = s.uploader.Upload(*s.currentFilename, s.generateKeyname())
+			keyName := s.generateKeyname()
+			err = s.uploader.Upload(*s.currentFilename, keyName)
 			if err != nil {
 				log.Println("Failed to upload:", err)
 				return fmt.Errorf("Failed to upload")
@@ -59,15 +61,30 @@ func (s *Store) closeWriter() error {
 				log.Println("Failed to cleanup:", err)
 				return fmt.Errorf("Failed to cleanup writer")
 			}
-
+			err = s.uploadMetadata(keyName)
+			if err != nil {
+				return fmt.Errorf("failed to upload metadata: %s", err.Error())
+			}
 		}
 
 		s.currentFilename = nil
-
 		s.reader.Checkpoint()
 	}
+	s.streamMetadata = newStreamMetadata()
 
 	return nil
+}
+
+func (s *Store) uploadMetadata(keyName string) (err error) {
+	// upload the metadata
+	var metadataBuf bytes.Buffer
+	err = json.NewEncoder(&metadataBuf).Encode(&s.streamMetadata)
+	if err != nil {
+		err = fmt.Errorf("failed to upload metadata: %s", err.Error())
+		return
+	}
+	s.uploader.UploadBuf(&metadataBuf, keyName+".metadata")
+	return
 }
 
 func (s *Store) openWriter(fname string) (err error) {
@@ -205,11 +222,60 @@ func NewStore(name string, r StreamReader, up *S3Uploader) (s *Store) {
 	buf := bytes.NewBuffer(b)
 
 	s = &Store{
-		name:     name,
-		reader:   r,
-		buf:      buf,
-		uploader: up,
+		name:           name,
+		reader:         r,
+		buf:            buf,
+		uploader:       up,
+		streamMetadata: newStreamMetadata(),
 	}
 
 	return
+}
+
+type streamMetadata struct {
+	// shard ID => shardInfo
+	Shards map[string]*shardInfo `json:"shards"`
+}
+
+func newStreamMetadata() *streamMetadata {
+	return &streamMetadata{
+		Shards: make(map[string]*shardInfo),
+	}
+}
+
+func (s *streamMetadata) noteSequenceNumber(sequenceNum string, shardID string) {
+	sh := s.Shards[shardID]
+	if sh == nil {
+		sh = &shardInfo{}
+		s.Shards[shardID] = sh
+	}
+	sh.noteSequenceNumber(sequenceNum)
+}
+
+type shardInfo struct {
+	MinSequenceNumber string `json:"min_sequence_number"`
+	MaxSequenceNumber string `json:"max_sequence_number"`
+}
+
+func (s *shardInfo) noteSequenceNumber(sequenceNum string) {
+	if s.MinSequenceNumber == "" {
+		s.MinSequenceNumber = sequenceNum
+	} else {
+		nums := naturalsort.NaturalSort([]string{
+			sequenceNum,
+			s.MinSequenceNumber,
+		})
+		sort.Sort(nums)
+		s.MinSequenceNumber = nums[0]
+	}
+	if s.MaxSequenceNumber == "" {
+		s.MaxSequenceNumber = sequenceNum
+	} else {
+		nums := naturalsort.NaturalSort([]string{
+			sequenceNum,
+			s.MaxSequenceNumber,
+		})
+		sort.Sort(nums)
+		s.MaxSequenceNumber = nums[1]
+	}
 }

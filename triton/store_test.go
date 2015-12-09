@@ -112,3 +112,18 @@ func TestPut(t *testing.T) {
 		}
 	}
 }
+
+func TestShardInfo(t *testing.T) {
+	si := &shardInfo{}
+	si.noteSequenceNumber("12345")
+	si.noteSequenceNumber("01234")
+	si.noteSequenceNumber("11")
+
+	if si.MinSequenceNumber != "11" {
+		t.Fatalf("expecting the min sequence number to be 11 but got %q", si.MinSequenceNumber)
+	}
+	if si.MaxSequenceNumber != "12345" {
+		t.Fatalf("expecting the max sequence number to be 12345 but got %q", si.MaxSequenceNumber)
+	}
+
+}
