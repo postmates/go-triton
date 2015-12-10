@@ -1,11 +1,11 @@
 package triton
 
-type shardRecord struct {
-	record   map[string]interface{}
-	shard    string
-	sequence string
+type ShardRecord struct {
+	Record         map[string]interface{}
+	ShardID        ShardID
+	SequenceNumber SequenceNumber
 }
 
-type shardReader interface {
-	readShardRecord() (result *shardRecord, err error)
+type ShardReader interface {
+	ReadShardRecord() (result *ShardRecord, err error)
 }

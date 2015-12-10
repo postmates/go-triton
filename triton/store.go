@@ -11,17 +11,19 @@ import (
 	"log"
 	"os"
 	"sort"
+	"sync"
 	"time"
 )
 
-type CheckpointService interface {
-	Checkpoint(string) error
+type ShardReaderCheckpointer interface {
+	ShardReader
+	Checkpoint() error
 }
 
 // A store manages buffering records together into files, and uploading them somewhere.
 type Store struct {
 	name           string
-	reader         StreamReader
+	reader         ShardReaderCheckpointer
 	streamMetadata *streamMetadata
 
 	// Our uploaders manages sending our datafiles somewhere
@@ -83,7 +85,7 @@ func (s *Store) uploadMetadata(keyName string) (err error) {
 		err = fmt.Errorf("failed to upload metadata: %s", err.Error())
 		return
 	}
-	s.uploader.UploadBuf(&metadataBuf, keyName+".metadata")
+	s.uploader.UploadData(&metadataBuf, keyName+".metadata")
 	return
 }
 
@@ -101,7 +103,6 @@ func (s *Store) openWriter(fname string) (err error) {
 	s.currentFilename = &fname
 	s.currentWriter = f
 	s.currentLogTime = time.Now()
-
 	return
 }
 
@@ -197,7 +198,7 @@ func (s *Store) Store() (err error) {
 		// TODO: We're unmarshalling and then marshalling msgpack here when
 		// there is not real reason except that's a more useful general
 		// interface.  We should add another that is ReadRaw
-		rec, err := s.reader.ReadRecord()
+		shardRec, err := s.reader.ReadShardRecord()
 		if err != nil {
 			if err == io.EOF {
 				break
@@ -205,8 +206,8 @@ func (s *Store) Store() (err error) {
 				return err
 			}
 		}
-
-		err = s.PutRecord(rec)
+		s.streamMetadata.noteSequenceNumber(shardRec.ShardID, shardRec.SequenceNumber)
+		err = s.PutRecord(shardRec.Record)
 		if err != nil {
 			return err
 		}
@@ -217,7 +218,7 @@ func (s *Store) Store() (err error) {
 
 const BUFFER_SIZE int = 1024 * 1024
 
-func NewStore(name string, r StreamReader, up *S3Uploader) (s *Store) {
+func NewStore(name string, r ShardReaderCheckpointer, up *S3Uploader) (s *Store) {
 	b := make([]byte, 0, BUFFER_SIZE)
 	buf := bytes.NewBuffer(b)
 
@@ -234,16 +235,19 @@ func NewStore(name string, r StreamReader, up *S3Uploader) (s *Store) {
 
 type streamMetadata struct {
 	// shard ID => shardInfo
-	Shards map[string]*shardInfo `json:"shards"`
+	Shards map[ShardID]*shardInfo `json:"shards"`
+	sync.Mutex
 }
 
 func newStreamMetadata() *streamMetadata {
 	return &streamMetadata{
-		Shards: make(map[string]*shardInfo),
+		Shards: make(map[ShardID]*shardInfo),
 	}
 }
 
-func (s *streamMetadata) noteSequenceNumber(sequenceNum string, shardID string) {
+func (s *streamMetadata) noteSequenceNumber(shardID ShardID, sequenceNum SequenceNumber) {
+	s.Lock()
+	defer s.Unlock()
 	sh := s.Shards[shardID]
 	if sh == nil {
 		sh = &shardInfo{}
@@ -253,29 +257,29 @@ func (s *streamMetadata) noteSequenceNumber(sequenceNum string, shardID string) 
 }
 
 type shardInfo struct {
-	MinSequenceNumber string `json:"min_sequence_number"`
-	MaxSequenceNumber string `json:"max_sequence_number"`
+	MinSequenceNumber SequenceNumber `json:"min_sequence_number"`
+	MaxSequenceNumber SequenceNumber `json:"max_sequence_number"`
 }
 
-func (s *shardInfo) noteSequenceNumber(sequenceNum string) {
+func (s *shardInfo) noteSequenceNumber(sequenceNum SequenceNumber) {
 	if s.MinSequenceNumber == "" {
 		s.MinSequenceNumber = sequenceNum
 	} else {
 		nums := naturalsort.NaturalSort([]string{
-			sequenceNum,
-			s.MinSequenceNumber,
+			string(sequenceNum),
+			string(s.MinSequenceNumber),
 		})
 		sort.Sort(nums)
-		s.MinSequenceNumber = nums[0]
+		s.MinSequenceNumber = SequenceNumber(nums[0])
 	}
 	if s.MaxSequenceNumber == "" {
 		s.MaxSequenceNumber = sequenceNum
 	} else {
 		nums := naturalsort.NaturalSort([]string{
-			sequenceNum,
-			s.MaxSequenceNumber,
+			string(sequenceNum),
+			string(s.MaxSequenceNumber),
 		})
 		sort.Sort(nums)
-		s.MaxSequenceNumber = nums[1]
+		s.MaxSequenceNumber = SequenceNumber(nums[1])
 	}
 }

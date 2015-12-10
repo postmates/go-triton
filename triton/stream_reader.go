@@ -22,7 +22,7 @@ type StreamReader interface {
 type multiShardStreamReader struct {
 	checkpointer Checkpointer
 	readers      []*ShardStreamReader
-	recStream    chan *shardRecord
+	recStream    chan *ShardRecord
 	allWg        sync.WaitGroup
 	done         chan struct{}
 	quit         chan struct{}
@@ -38,12 +38,14 @@ func (msr *multiShardStreamReader) Checkpoint() (err error) {
 }
 
 func (msr *multiShardStreamReader) ReadRecord() (result map[string]interface{}, err error) {
-	shardRecord, err := msr.readShardRecord()
-	result = shardRecord.record
+	shardRecord, err := msr.ReadShardRecord()
+	if err != nil {
+		result = shardRecord.Record
+	}
 	return
 }
 
-func (msr *multiShardStreamReader) readShardRecord() (result *shardRecord, err error) {
+func (msr *multiShardStreamReader) ReadShardRecord() (result *ShardRecord, err error) {
 	select {
 	case result = <-msr.recStream:
 	case <-msr.done:
@@ -64,7 +66,7 @@ func NewStreamReader(svc KinesisService, streamName string, c Checkpointer) (sr 
 	msr := multiShardStreamReader{
 		checkpointer: c,
 		readers:      make([]*ShardStreamReader, 0),
-		recStream:    make(chan *shardRecord),
+		recStream:    make(chan *ShardRecord),
 		allWg:        sync.WaitGroup{},
 		done:         make(chan struct{}),
 		quit:         make(chan struct{}, maxShards),
@@ -124,7 +126,7 @@ func NewStreamReader(svc KinesisService, streamName string, c Checkpointer) (sr 
 	return
 }
 
-func processStreamToChan(r *ShardStreamReader, recChan chan *shardRecord, done chan struct{}) {
+func processStreamToChan(r *ShardStreamReader, recChan chan *ShardRecord, done chan struct{}) {
 	for {
 		select {
 		case <-done:
@@ -156,10 +158,10 @@ func processStreamToChan(r *ShardStreamReader, recChan chan *shardRecord, done c
 			log.Println("Extra bytes in stream record", len(eb))
 			return
 		}
-		shardRec := &shardRecord{
-			record:   rec,
-			shard:    string(r.ShardID),
-			sequence: *kRec.SequenceNumber,
+		shardRec := &ShardRecord{
+			Record:         rec,
+			ShardID:        r.ShardID,
+			SequenceNumber: SequenceNumber(*kRec.SequenceNumber),
 		}
 
 		select {

@@ -47,7 +47,7 @@ func (s *S3Uploader) Upload(fileName, keyName string) (err error) {
 	return
 }
 
-func (s *S3Uploader) UploadBuf(r io.Reader, keyName string) (err error) {
+func (s *S3Uploader) UploadData(r io.Reader, keyName string) (err error) {
 	log.Println("Uploading", keyName)
 
 	ui := s3manager.UploadInput{
