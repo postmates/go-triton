@@ -2,6 +2,7 @@ package triton
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -66,6 +67,17 @@ func (s *ShardStreamReader) wait(minInterval time.Duration) {
 	s.lastRequest = &n
 }
 
+func isRetryError(err error) bool {
+	if awsErr, ok := err.(awserr.Error); ok {
+		if awsErr.Code() == "ProvisionedThroughputExceededException" {
+			log.Printf("%s: %s. Retrying", awsErr.Code(), awsErr.Message())
+			return true
+		}
+	}
+
+	return false
+}
+
 func (s *ShardStreamReader) fetchMoreRecords() (err error) {
 	s.wait(MIN_POLL_INTERVAL)
 
@@ -83,7 +95,11 @@ func (s *ShardStreamReader) fetchMoreRecords() (err error) {
 
 	gro, err := s.service.GetRecords(gri)
 	if err != nil {
-		return err
+		if isRetryError(err) {
+			return nil
+		} else {
+			return err
+		}
 	}
 
 	s.records = gro.Records
