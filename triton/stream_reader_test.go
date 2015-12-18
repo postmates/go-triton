@@ -1,5 +1,6 @@
 package triton
 
+import "fmt"
 import "testing"
 
 func TestNewStreamReader(t *testing.T) {
@@ -40,9 +41,10 @@ func TestNewStreamReader(t *testing.T) {
 
 	rec1, err := sr.ReadRecord()
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err.Error())
 		return
 	}
+	fmt.Println("rec1: ", rec1)
 
 	// Records could be in any order
 	if rec1["value"].(string) == "a" {

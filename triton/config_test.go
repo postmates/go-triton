@@ -40,9 +40,7 @@ func TestNewConfigFromFile(t *testing.T) {
 }
 
 func TestMissingStream(t *testing.T) {
-
 	c := Config{}
-
 	_, err := c.ConfigForName("foo")
 	if err != nil {
 		// all good

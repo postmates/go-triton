@@ -22,6 +22,7 @@ type KinesisService interface {
 type S3Service interface {
 	GetObject(input *s3.GetObjectInput) (*s3.GetObjectOutput, error)
 	ListObjects(*s3.ListObjectsInput) (*s3.ListObjectsOutput, error)
+	ListObjectsPages(*s3.ListObjectsInput, func(*s3.ListObjectsOutput, bool) bool) error
 }
 
 type S3UploaderService interface {
@@ -44,4 +45,9 @@ func (s *nullS3Service) GetObject(*s3.GetObjectInput) (*s3.GetObjectOutput, erro
 func (s *nullS3Service) ListObjects(*s3.ListObjectsInput) (*s3.ListObjectsOutput, error) {
 	loo := &s3.ListObjectsOutput{}
 	return loo, nil
+}
+
+func (s *nullS3Service) ListObjectsPages(input *s3.ListObjectsInput, f func(*s3.ListObjectsOutput, bool) bool) error {
+	f(&s3.ListObjectsOutput{}, true)
+	return nil
 }

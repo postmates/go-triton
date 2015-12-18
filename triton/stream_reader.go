@@ -17,6 +17,7 @@ type StreamReader interface {
 	Reader
 	Checkpoint() error
 	Stop()
+	ReadShardRecord() (*ShardRecord, error)
 }
 
 type multiShardStreamReader struct {
@@ -40,8 +41,9 @@ func (msr *multiShardStreamReader) Checkpoint() (err error) {
 func (msr *multiShardStreamReader) ReadRecord() (result map[string]interface{}, err error) {
 	shardRecord, err := msr.ReadShardRecord()
 	if err != nil {
-		result = shardRecord.Record
+		return
 	}
+	result = shardRecord.Record
 	return
 }
 

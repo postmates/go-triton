@@ -1,19 +1,24 @@
 package triton
 
 import (
+	"fmt"
 	"io"
 	"testing"
 	"time"
 )
 
+var (
+	streamTime    = time.Date(2015, time.August, 1, 0, 0, 0, 0, time.UTC)
+	streamKeyPath = fmt.Sprintf("%04d%02d%02d/test_stream-archive-%d.tri", streamTime.Year(), streamTime.Month(), streamTime.Day(), streamTime.Unix())
+)
+
 func TestNewArchive(t *testing.T) {
-	key := "20150801/test_stream-archive-123455.tri"
-	sa, err := NewStoreArchive("foo", key, nil)
+	sa, err := NewStoreArchive("foo", streamKeyPath, nil)
 	if err != nil {
-		t.Fatal("Error creating sa", err)
+		t.Fatal("Error creating sa:", err.Error())
 	}
 
-	if sa.Key != key {
+	if sa.Key != streamKeyPath {
 		t.Error("Failed to store key")
 	}
 
@@ -24,45 +29,38 @@ func TestNewArchive(t *testing.T) {
 	if sa.ClientName != "archive" {
 		t.Error("Should have a client name")
 	}
-
-	if sa.T != time.Date(2015, time.August, 1, 0, 0, 0, 0, time.UTC) {
-		t.Error("StreamName mismatch", sa.StreamName)
+	if !sa.T.Equal(streamTime) {
+		t.Errorf("Stream time mismatch: %s != %s", sa.T, streamTime)
 	}
 
 	if sa.Bucket != "foo" {
-		t.Error("bucket name mismatch")
+		t.Error("bucket name mismatch, %s != %s", sa.Bucket, "foo")
 	}
 
-	if sa.SortValue != 123455 {
-		t.Error("Sort value mismatch")
-	}
 }
 
 func TestNewArchiveShard(t *testing.T) {
-	sa, err := NewStoreArchive("foo", "20150801/test_stream-store_test-123455.tri", nil)
+	sa, err := NewStoreArchive("foo", streamKeyPath, nil)
 	if err != nil {
-		t.Fatal("Error creating sa", err)
+		t.Fatalf("Error creating sa", err)
 	}
 
 	if sa.StreamName != "test_stream" {
 		t.Error("StreamName mismatch", sa.StreamName)
 	}
 
-	if sa.ClientName != "store_test" {
+	if sa.ClientName != "archive" {
 		t.Error("Should have a client name")
 	}
 
-	if sa.T != time.Date(2015, time.August, 1, 0, 0, 0, 0, time.UTC) {
-		t.Error("StreamName mismatch", sa.StreamName)
+	if !sa.T.Equal(streamTime) {
+		t.Errorf("StreamName mismatch %s != %s", sa.T, streamTime)
 	}
 
-	if sa.SortValue != 123455 {
-		t.Error("Sort value mismatch")
-	}
 }
 
 func TestReadEmpty(t *testing.T) {
-	sa, err := NewStoreArchive("foo", "20150801/test_stream-store_test-123455.tri", &nullS3Service{})
+	sa, err := NewStoreArchive("foo", streamKeyPath, &nullS3Service{})
 	if err != nil {
 		t.Fatal("Error creating sa", err)
 	}

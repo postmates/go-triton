@@ -44,11 +44,7 @@ func (l StoreArchiveList) Swap(i, j int) {
 }
 
 func (l StoreArchiveList) Less(i, j int) bool {
-	if l[i].T != l[j].T {
-		return l[i].T.Before(l[j].T)
-	} else {
-		return l[i].SortValue < l[j].SortValue
-	}
+	return l[i].T.Before(l[j].T)
 }
 
 func NewStoreReader(svc S3Service, bucketName, clientName, streamName string, startDate, endDate time.Time) (Reader, error) {

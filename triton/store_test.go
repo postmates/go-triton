@@ -17,6 +17,10 @@ func (nsr *nullStreamReader) ReadRecord() (map[string]interface{}, error) {
 	return nil, io.EOF
 }
 
+func (nsr *nullStreamReader) ReadShardRecord() (*ShardRecord, error) {
+	return nil, io.EOF
+}
+
 func (nsr *nullStreamReader) Checkpoint() error {
 	return nil
 }
@@ -39,7 +43,7 @@ func TestGenerateKeyname(t *testing.T) {
 	s.currentLogTime = time.Date(2015, 6, 30, 2, 45, 0, 0, time.UTC)
 	name := s.generateKeyname()
 	if name != "20150630/test-1435632300.tri" {
-		t.Errorf("Bad file file %v", name)
+		t.Errorf("Bad file %v", name)
 	}
 }
 
@@ -114,22 +118,21 @@ func TestPut(t *testing.T) {
 }
 
 func TestShardInfo(t *testing.T) {
-	si := &shardInfo{}
+	si := &ShardInfo{}
 	si.noteSequenceNumber("12345")
-	si.noteSequenceNumber("01234")
-	si.noteSequenceNumber("11")
+	si.noteSequenceNumber("12346")
 
-	if si.MinSequenceNumber != "11" {
-		t.Fatalf("expecting the min sequence number to be 11 but got %q", si.MinSequenceNumber)
+	if si.MinSequenceNumber != "12345" {
+		t.Fatalf("expecting the min sequence number to be 12345 but got %q", si.MinSequenceNumber)
 	}
-	if si.MaxSequenceNumber != "12345" {
-		t.Fatalf("expecting the max sequence number to be 12345 but got %q", si.MaxSequenceNumber)
+	if si.MaxSequenceNumber != "12346" {
+		t.Fatalf("expecting the max sequence number to be 12346 but got %q", si.MaxSequenceNumber)
 	}
 
 }
 
 func BenchmarkShardInfo(b *testing.B) {
-	si := &shardInfo{}
+	si := &ShardInfo{}
 	for i := 0; i < b.N; i++ {
 		si.noteSequenceNumber("12345")
 	}

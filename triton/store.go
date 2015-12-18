@@ -5,13 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/golang/snappy"
-	"github.com/skarademir/naturalsort"
 	"github.com/tinylib/msgp/msgp"
 	"io"
 	"log"
 	"os"
-	"sort"
-	"sync"
 	"time"
 )
 
@@ -24,7 +21,7 @@ type ShardReaderCheckpointer interface {
 type Store struct {
 	name           string
 	reader         ShardReaderCheckpointer
-	streamMetadata *streamMetadata
+	streamMetadata *StreamMetadata
 
 	// Our uploaders manages sending our datafiles somewhere
 	uploader        *S3Uploader
@@ -72,7 +69,7 @@ func (s *Store) closeWriter() error {
 		s.currentFilename = nil
 		s.reader.Checkpoint()
 	}
-	s.streamMetadata = newStreamMetadata()
+	s.streamMetadata = NewStreamMetadata()
 
 	return nil
 }
@@ -113,12 +110,7 @@ func (s *Store) generateFilename() (name string) {
 }
 
 func (s *Store) generateKeyname() (name string) {
-	day_s := s.currentLogTime.Format("20060102")
-	ts_s := fmt.Sprintf("%d", s.currentLogTime.Unix())
-
-	name = fmt.Sprintf("%s/%s-%s.tri", day_s, s.name, ts_s)
-
-	return
+	return ArchiveKey{Time: s.currentLogTime, Stream: s.name}.Path()
 }
 
 func (s *Store) getCurrentWriter() (w io.Writer, err error) {
@@ -227,59 +219,8 @@ func NewStore(name string, r ShardReaderCheckpointer, up *S3Uploader) (s *Store)
 		reader:         r,
 		buf:            buf,
 		uploader:       up,
-		streamMetadata: newStreamMetadata(),
+		streamMetadata: NewStreamMetadata(),
 	}
 
 	return
-}
-
-type streamMetadata struct {
-	// shard ID => shardInfo
-	Shards map[ShardID]*shardInfo `json:"shards"`
-	sync.Mutex
-}
-
-func newStreamMetadata() *streamMetadata {
-	return &streamMetadata{
-		Shards: make(map[ShardID]*shardInfo),
-	}
-}
-
-func (s *streamMetadata) noteSequenceNumber(shardID ShardID, sequenceNum SequenceNumber) {
-	s.Lock()
-	defer s.Unlock()
-	sh := s.Shards[shardID]
-	if sh == nil {
-		sh = &shardInfo{}
-		s.Shards[shardID] = sh
-	}
-	sh.noteSequenceNumber(sequenceNum)
-}
-
-type shardInfo struct {
-	MinSequenceNumber SequenceNumber `json:"min_sequence_number"`
-	MaxSequenceNumber SequenceNumber `json:"max_sequence_number"`
-}
-
-func (s *shardInfo) noteSequenceNumber(sequenceNum SequenceNumber) {
-	if s.MinSequenceNumber == "" {
-		s.MinSequenceNumber = sequenceNum
-	} else {
-		nums := naturalsort.NaturalSort([]string{
-			string(sequenceNum),
-			string(s.MinSequenceNumber),
-		})
-		sort.Sort(nums)
-		s.MinSequenceNumber = SequenceNumber(nums[0])
-	}
-	if s.MaxSequenceNumber == "" {
-		s.MaxSequenceNumber = sequenceNum
-	} else {
-		nums := naturalsort.NaturalSort([]string{
-			string(sequenceNum),
-			string(s.MaxSequenceNumber),
-		})
-		sort.Sort(nums)
-		s.MaxSequenceNumber = SequenceNumber(nums[1])
-	}
 }

@@ -6,7 +6,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/tinylib/msgp/msgp"
 	"io"
-	"log"
 	"sync"
 	"time"
 )
@@ -82,8 +81,8 @@ func (t *TailAt) Next() (record Record, err error) {
 	return
 }
 
+// sendArchivedRecords sends all the archived records between tail at and up to a day afterward.
 func (t *TailAt) sendArchivedRecords() (lastMetadata *StreamMetadata, err error) {
-	log.Println("sending archived records")
 	archiveRepository := NewArchiveRepository(t.s3Service, nil, t.bucket, t.stream, t.client)
 	aTime := t.at.AddDate(0, 0, -1)
 	end := t.at.AddDate(0, 0, 2)
@@ -95,25 +94,20 @@ func (t *TailAt) sendArchivedRecords() (lastMetadata *StreamMetadata, err error)
 		if !aTime.Before(end) {
 			break
 		}
-		log.Println("checking", aTime)
 		var archives []StoreArchive
 		archives, err = archiveRepository.ArchivesAtDate(aTime)
 		if err != nil {
 			return
 		}
-		log.Println("archives: ", archives)
 		for _, archive := range archives {
 			if t.closed {
 				return
 			}
 			lastArchive = &archive
-			log.Println("archive time:", archive.T, "tail time:", t.at)
 			if archive.T.Before(t.at) {
-				log.Println("archive is before target")
 				continue
 			}
 			for {
-				log.Println("reading records from archive")
 				var rec map[string]interface{}
 				rec, err = archive.ReadRecord()
 				if err == io.EOF {
@@ -122,20 +116,19 @@ func (t *TailAt) sendArchivedRecords() (lastMetadata *StreamMetadata, err error)
 				} else if err != nil {
 					return
 				}
-				log.Println("record", rec)
 				t.records <- rec
 			}
 		}
 		aTime = aTime.AddDate(0, 0, 1)
 	}
-	log.Println("done sending archives")
 	if lastArchive != nil {
-		log.Println("loading metadata")
 		lastMetadata, err = lastArchive.GetStreamMetadata()
 	}
 	return
 }
 
+// initStream is internal method that starts sending archived records followed
+// by reading from Kinesis shards in parallel
 func (t *TailAt) initStream() {
 	if t.streamInited {
 		return
@@ -147,7 +140,6 @@ func (t *TailAt) initStream() {
 		t.errors <- err
 		return
 	}
-	log.Println("done sending archived records")
 	err = t.sendKinesisRecords(lastStreamMetadata)
 	if err != nil {
 		t.errors <- err
@@ -180,8 +172,6 @@ func (t *TailAt) sendKinesisRecords(previousMetadata *StreamMetadata) (err error
 // records at startingSequenceNumber, otherwise it tries to find a starting
 // sequence number at TRIM_HORIZON to begin reading.
 func (t *TailAt) sendKinesisRecordsForShard(shard ShardID, startingSequenceNumber SequenceNumber) {
-	log.Println("sendKinesisRecordsForShard", shard, startingSequenceNumber)
-
 	// Start reading from shard and send records to t.records
 	iterator, err := t.getStreamIterator(shard, startingSequenceNumber)
 	if err != nil {

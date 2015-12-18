@@ -1,7 +1,7 @@
 package triton
 
 type ShardRecord struct {
-	Record         map[string]interface{}
+	Record         Record
 	ShardID        ShardID
 	SequenceNumber SequenceNumber
 }
