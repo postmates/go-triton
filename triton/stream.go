@@ -67,21 +67,25 @@ func (s *ShardStreamReader) wait(minInterval time.Duration) {
 	s.lastRequest = &n
 }
 
+// Documented Kinesis specific errors as well as common errors we
+// should probably just retry on.
+// http://docs.aws.amazon.com/kinesis/latest/APIReference/CommonErrors.html
+var retryErrorCodes = [...]string{
+	"ProvisionedThroughputExceededException",
+	"ServiceUnavailable",
+	"InternalFailure",
+	"Throttling",
+}
+
 func isRetryError(err error) bool {
 	if awsErr, ok := err.(awserr.Error); ok {
 		retry := false
-		// Documented Kinesis specific errors as well as common errors we
-		// should probably just retry on.
-		// http://docs.aws.amazon.com/kinesis/latest/APIReference/CommonErrors.html
-		switch awsErr.Code() {
-		case "ProvisionedThroughputExceededException":
-			retry = true
-		case "ServiceUnavailable":
-			retry = true
-		case "InternalFailure":
-			retry = true
-		case "Throttling":
-			retry = true
+
+		for _, code := range retryErrorCodes {
+			if awsErr.Code() == code {
+				retry = true
+				break
+			}
 		}
 
 		if retry {
