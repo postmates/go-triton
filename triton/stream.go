@@ -131,6 +131,8 @@ func (s *ShardStreamReader) fetchMoreRecords() (err error) {
 		}
 	}
 
+	s.retries = 0
+
 	s.records = gro.Records
 	s.NextIteratorValue = gro.NextShardIterator
 
