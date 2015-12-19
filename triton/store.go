@@ -2,33 +2,33 @@ package triton
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"github.com/golang/snappy"
+	"github.com/tinylib/msgp/msgp"
 	"io"
 	"log"
 	"os"
 	"time"
-
-	"github.com/golang/snappy"
-	"github.com/tinylib/msgp/msgp"
 )
 
-type CheckpointService interface {
-	Checkpoint(string) error
+type ShardReaderCheckpointer interface {
+	ShardReader
+	Checkpoint() error
 }
 
 // A store manages buffering records together into files, and uploading them somewhere.
 type Store struct {
-	name   string
-	reader StreamReader
+	name           string
+	reader         ShardReaderCheckpointer
+	streamMetadata *StreamMetadata
 
 	// Our uploaders manages sending our datafiles somewhere
-	uploader *S3Uploader
-
+	uploader        *S3Uploader
 	currentLogTime  time.Time
 	currentWriter   io.WriteCloser
 	currentFilename *string
-
-	buf *bytes.Buffer
+	buf             *bytes.Buffer
 }
 
 func (s *Store) closeWriter() error {
@@ -48,7 +48,8 @@ func (s *Store) closeWriter() error {
 		s.currentWriter = nil
 
 		if s.uploader != nil {
-			err = s.uploader.Upload(*s.currentFilename, s.generateKeyname())
+			keyName := s.generateKeyname()
+			err = s.uploader.Upload(*s.currentFilename, keyName)
 			if err != nil {
 				log.Println("Failed to upload:", err)
 				return fmt.Errorf("Failed to upload")
@@ -59,15 +60,30 @@ func (s *Store) closeWriter() error {
 				log.Println("Failed to cleanup:", err)
 				return fmt.Errorf("Failed to cleanup writer")
 			}
-
+			err = s.uploadMetadata(keyName)
+			if err != nil {
+				return fmt.Errorf("failed to upload metadata: %s", err.Error())
+			}
 		}
 
 		s.currentFilename = nil
-
 		s.reader.Checkpoint()
 	}
+	s.streamMetadata = NewStreamMetadata()
 
 	return nil
+}
+
+func (s *Store) uploadMetadata(keyName string) (err error) {
+	// upload the metadata
+	var metadataBuf bytes.Buffer
+	err = json.NewEncoder(&metadataBuf).Encode(&s.streamMetadata)
+	if err != nil {
+		err = fmt.Errorf("failed to upload metadata: %s", err.Error())
+		return
+	}
+	s.uploader.UploadData(&metadataBuf, keyName+".metadata")
+	return
 }
 
 func (s *Store) openWriter(fname string) (err error) {
@@ -84,7 +100,6 @@ func (s *Store) openWriter(fname string) (err error) {
 	s.currentFilename = &fname
 	s.currentWriter = f
 	s.currentLogTime = time.Now()
-
 	return
 }
 
@@ -95,12 +110,7 @@ func (s *Store) generateFilename() (name string) {
 }
 
 func (s *Store) generateKeyname() (name string) {
-	day_s := s.currentLogTime.Format("20060102")
-	ts_s := fmt.Sprintf("%d", s.currentLogTime.Unix())
-
-	name = fmt.Sprintf("%s/%s-%s.tri", day_s, s.name, ts_s)
-
-	return
+	return ArchiveKey{Time: s.currentLogTime, Stream: s.name}.Path()
 }
 
 func (s *Store) getCurrentWriter() (w io.Writer, err error) {
@@ -180,7 +190,7 @@ func (s *Store) Store() (err error) {
 		// TODO: We're unmarshalling and then marshalling msgpack here when
 		// there is not real reason except that's a more useful general
 		// interface.  We should add another that is ReadRaw
-		rec, err := s.reader.ReadRecord()
+		shardRec, err := s.reader.ReadShardRecord()
 		if err != nil {
 			if err == io.EOF {
 				break
@@ -188,8 +198,8 @@ func (s *Store) Store() (err error) {
 				return err
 			}
 		}
-
-		err = s.PutRecord(rec)
+		s.streamMetadata.noteSequenceNumber(shardRec.ShardID, shardRec.SequenceNumber)
+		err = s.PutRecord(shardRec.Record)
 		if err != nil {
 			return err
 		}
@@ -200,15 +210,16 @@ func (s *Store) Store() (err error) {
 
 const BUFFER_SIZE int = 1024 * 1024
 
-func NewStore(name string, r StreamReader, up *S3Uploader) (s *Store) {
+func NewStore(name string, r ShardReaderCheckpointer, up *S3Uploader) (s *Store) {
 	b := make([]byte, 0, BUFFER_SIZE)
 	buf := bytes.NewBuffer(b)
 
 	s = &Store{
-		name:     name,
-		reader:   r,
-		buf:      buf,
-		uploader: up,
+		name:           name,
+		reader:         r,
+		buf:            buf,
+		uploader:       up,
+		streamMetadata: NewStreamMetadata(),
 	}
 
 	return

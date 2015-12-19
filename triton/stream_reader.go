@@ -17,12 +17,13 @@ type StreamReader interface {
 	Reader
 	Checkpoint() error
 	Stop()
+	ReadShardRecord() (*ShardRecord, error)
 }
 
 type multiShardStreamReader struct {
 	checkpointer Checkpointer
 	readers      []*ShardStreamReader
-	recStream    chan map[string]interface{}
+	recStream    chan *ShardRecord
 	allWg        sync.WaitGroup
 	done         chan struct{}
 	quit         chan struct{}
@@ -37,13 +38,22 @@ func (msr *multiShardStreamReader) Checkpoint() (err error) {
 	return
 }
 
-func (msr *multiShardStreamReader) ReadRecord() (rec map[string]interface{}, err error) {
-	select {
-	case rec = <-msr.recStream:
-		return rec, nil
-	case <-msr.done:
-		return nil, io.EOF
+func (msr *multiShardStreamReader) ReadRecord() (result map[string]interface{}, err error) {
+	shardRecord, err := msr.ReadShardRecord()
+	if err != nil {
+		return
 	}
+	result = shardRecord.Record
+	return
+}
+
+func (msr *multiShardStreamReader) ReadShardRecord() (result *ShardRecord, err error) {
+	select {
+	case result = <-msr.recStream:
+	case <-msr.done:
+		err = io.EOF
+	}
+	return
 }
 
 func (msr *multiShardStreamReader) Stop() {
@@ -56,12 +66,12 @@ const maxShards int = 100
 
 func NewStreamReader(svc KinesisService, streamName string, c Checkpointer) (sr StreamReader, err error) {
 	msr := multiShardStreamReader{
-		c,
-		make([]*ShardStreamReader, 0),
-		make(chan map[string]interface{}),
-		sync.WaitGroup{},
-		make(chan struct{}),
-		make(chan struct{}, maxShards),
+		checkpointer: c,
+		readers:      make([]*ShardStreamReader, 0),
+		recStream:    make(chan *ShardRecord),
+		allWg:        sync.WaitGroup{},
+		done:         make(chan struct{}),
+		quit:         make(chan struct{}, maxShards),
 	}
 
 	shards, err := ListShards(svc, streamName)
@@ -118,7 +128,7 @@ func NewStreamReader(svc KinesisService, streamName string, c Checkpointer) (sr 
 	return
 }
 
-func processStreamToChan(r *ShardStreamReader, recChan chan map[string]interface{}, done chan struct{}) {
+func processStreamToChan(r *ShardStreamReader, recChan chan *ShardRecord, done chan struct{}) {
 	for {
 		select {
 		case <-done:
@@ -150,9 +160,14 @@ func processStreamToChan(r *ShardStreamReader, recChan chan map[string]interface
 			log.Println("Extra bytes in stream record", len(eb))
 			return
 		}
+		shardRec := &ShardRecord{
+			Record:         rec,
+			ShardID:        r.ShardID,
+			SequenceNumber: SequenceNumber(*kRec.SequenceNumber),
+		}
 
 		select {
-		case recChan <- rec:
+		case recChan <- shardRec:
 		case <-done:
 			return
 		}
