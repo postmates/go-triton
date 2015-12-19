@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/kinesis"
 )
 
@@ -28,6 +29,22 @@ func (s *NullKinesisService) GetRecords(*kinesis.GetRecordsInput) (*kinesis.GetR
 
 func (s *NullKinesisService) DescribeStream(input *kinesis.DescribeStreamInput) (*kinesis.DescribeStreamOutput, error) {
 	return nil, fmt.Errorf("Not Implemented")
+}
+
+type FailingKinesisService struct{}
+
+func (s *FailingKinesisService) DescribeStream(input *kinesis.DescribeStreamInput) (*kinesis.DescribeStreamOutput, error) {
+	return nil, fmt.Errorf("Not Implemented")
+}
+
+func (s *FailingKinesisService) GetRecords(*kinesis.GetRecordsInput) (*kinesis.GetRecordsOutput, error) {
+	err := awserr.New("ProvisionedThroughputExceededException", "slow down dummy", fmt.Errorf("error"))
+	return nil, err
+}
+
+func (s *FailingKinesisService) GetShardIterator(*kinesis.GetShardIteratorInput) (*kinesis.GetShardIteratorOutput, error) {
+	gso := &kinesis.GetShardIteratorOutput{ShardIterator: aws.String("123")}
+	return gso, nil
 }
 
 func TestNewShardStreamReader(t *testing.T) {
@@ -105,6 +122,26 @@ func TestFetchMoreRecords(t *testing.T) {
 
 	if len(s.records) != 1 {
 		t.Errorf("Should have a record")
+	}
+}
+
+func TestRetryShardStreamReader(t *testing.T) {
+	svc := FailingKinesisService{}
+
+	s := NewShardStreamReader(&svc, "test-stream", "shard-0001")
+
+	err := s.fetchMoreRecords()
+	if err != nil {
+		t.Errorf("Received error %v", err)
+		return
+	}
+
+	if len(s.records) != 0 {
+		t.Errorf("Should have no records")
+	}
+
+	if s.retries != 1 {
+		t.Errorf("Should have a retry")
 	}
 }
 
