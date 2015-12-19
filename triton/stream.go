@@ -29,11 +29,13 @@ type ShardStreamReader struct {
 	service     KinesisService
 	records     []*kinesis.Record
 	lastRequest *time.Time
+	retries     int64
 }
 
 // Recommended minimum polling interval to keep from overloading a Kinesis
 // shard.
-const MIN_POLL_INTERVAL = 1.0 * time.Second
+const minPollInterval = 1.0 * time.Second
+const maxRetries = 3
 
 func (s *ShardStreamReader) initIterator() (err error) {
 	gsi := kinesis.GetShardIteratorInput{
@@ -57,7 +59,9 @@ func (s *ShardStreamReader) initIterator() (err error) {
 
 func (s *ShardStreamReader) wait(minInterval time.Duration) {
 	if s.lastRequest != nil {
-		sleepTime := minInterval - time.Since(*s.lastRequest)
+		retryDelay := time.Duration(s.retries*250) * time.Millisecond
+
+		sleepTime := (minInterval - time.Since(*s.lastRequest)) + retryDelay
 		if sleepTime >= time.Duration(0) {
 			time.Sleep(sleepTime)
 		}
@@ -77,7 +81,7 @@ var retryErrorCodes = [...]string{
 	"Throttling",
 }
 
-func isRetryError(err error) bool {
+func (s *ShardStreamReader) isRetryError(err error) bool {
 	if awsErr, ok := err.(awserr.Error); ok {
 		retry := false
 
@@ -89,8 +93,14 @@ func isRetryError(err error) bool {
 		}
 
 		if retry {
-			log.Printf("%s: %s. Retrying", awsErr.Code(), awsErr.Message())
-			return true
+			s.retries += 1
+			if s.retries <= maxRetries {
+				log.Printf("%s: %s. Retrying", awsErr.Code(), awsErr.Message())
+				return true
+			} else {
+				log.Printf("%s: %s. Max retries attempted", awsErr.Code(), awsErr.Message())
+				return false
+			}
 		}
 	}
 
@@ -98,7 +108,7 @@ func isRetryError(err error) bool {
 }
 
 func (s *ShardStreamReader) fetchMoreRecords() (err error) {
-	s.wait(MIN_POLL_INTERVAL)
+	s.wait(minPollInterval)
 
 	if s.NextIteratorValue == nil {
 		err := s.initIterator()
@@ -114,7 +124,7 @@ func (s *ShardStreamReader) fetchMoreRecords() (err error) {
 
 	gro, err := s.service.GetRecords(gri)
 	if err != nil {
-		if isRetryError(err) {
+		if s.isRetryError(err) {
 			return nil
 		} else {
 			return err

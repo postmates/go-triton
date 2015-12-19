@@ -139,6 +139,10 @@ func TestRetryShardStreamReader(t *testing.T) {
 	if len(s.records) != 0 {
 		t.Errorf("Should have no records")
 	}
+
+	if s.retries != 1 {
+		t.Errorf("Should have a retry")
+	}
 }
 
 func TestRead(t *testing.T) {
