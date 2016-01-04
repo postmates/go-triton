@@ -4,13 +4,13 @@ Triton is an opinionated set of tooling for building a data pipeline around an
 AWS stack including [Kinesis](http://aws.amazon.com/kinesis/) and S3.
 
 It provides the necessary glue for building real applications on top of the
-type of architecture. 
+type of architecture.
 
 ## Overview ##
 
 As your application collects data, write it to Kinesis streams as a series of
 events. Other applications in your infrastructure read from this stream
-providing a solid pattern for services to share data. 
+providing a solid pattern for services to share data.
 
 Triton aims to provide a level of tooling, glue and utility to make this
 ecosystem easy to use. Namely:
@@ -177,7 +177,25 @@ for {
     ...
 }
 ```
+### Tailing from a specific time
 
+You can tail from a specific point in time.  For example:
+
+```go
+
+kinesisClient := ...
+s3Client := ...
+
+tail := triton.NewTailAt(&triton.NewTailAtParams{
+  S3Service: ... s3 client for region where triton records live...,
+  KinesisService: ... kinesis client...,
+  StreamName: "courier_activity_prod",
+  Bucket: "postmates-triton-prod",
+  Client: "archive"
+  At: time.Now().Add(time.Minute * 30),  // 30 minutes ago
+})
+
+```
 
 ### Other Languages ###
 
