@@ -47,7 +47,7 @@ func (l StoreArchiveList) Less(i, j int) bool {
 	return l[i].T.Before(l[j].T)
 }
 
-func NewStoreReader(svc S3Service, bucketName, clientName, streamName string, startDate, endDate time.Time) (Reader, error) {
+func NewStoreReader(svc S3Service, bucketName, clientName, streamName string, startDate, endDate time.Time) (result Reader, err error) {
 	allDates := listDatesFromRange(startDate, endDate)
 	archives := make(StoreArchiveList, 0, len(allDates))
 
@@ -57,13 +57,14 @@ func NewStoreReader(svc S3Service, bucketName, clientName, streamName string, st
 		if clientName != "" {
 			prefix = fmt.Sprintf("%s%s-", prefix, clientName)
 		}
-		resp, err := svc.ListObjects(&s3.ListObjectsInput{
+		var resp *s3.ListObjectsOutput
+		resp, err = svc.ListObjects(&s3.ListObjectsInput{
 			Bucket: aws.String(bucketName),
 			Prefix: aws.String(prefix),
 		})
 
 		if err != nil {
-			return nil, err
+			return
 		}
 
 		for _, o := range resp.Contents {
@@ -90,7 +91,8 @@ func NewStoreReader(svc S3Service, bucketName, clientName, streamName string, st
 		}
 
 		if foundClientName != a.ClientName {
-			return nil, fmt.Errorf("Multiple clients found: %s and %s", foundClientName, a.ClientName)
+			err = fmt.Errorf("Multiple clients found: %s and %s", foundClientName, a.ClientName)
+			return
 		}
 	}
 
@@ -98,10 +100,10 @@ func NewStoreReader(svc S3Service, bucketName, clientName, streamName string, st
 
 	// Convert to a list of Readers... feels like there should be a better way
 	// here. Is this what generics are for? Or is there an interface for a list?
-	readers := make([]Reader, len(archives))
+	readers := make([]Reader, 0, len(archives))
 	for i := range archives {
 		readers[i] = &archives[i]
 	}
-
-	return NewSerialReader(readers), nil
+	result = NewSerialReader(readers)
+	return
 }

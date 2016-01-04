@@ -20,3 +20,6 @@ clean:
 cscope:
 	find $$GOPATH/src -type f -iname "*.go"> cscope.files
 	cscope -b -k
+
+tags:
+

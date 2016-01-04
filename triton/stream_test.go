@@ -3,7 +3,6 @@ package triton
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/kinesis"
@@ -33,78 +32,21 @@ func (s *NullKinesisService) DescribeStream(input *kinesis.DescribeStreamInput) 
 func TestNewShardStreamReader(t *testing.T) {
 	svc := NullKinesisService{}
 
-	s := NewShardStreamReader(&svc, "test-stream", "shard-0001")
-	if s.StreamName != "test-stream" {
+	s := newShardReader(&newShardReaderParams{
+		kinesisService: &svc,
+		stream:         "test-stream",
+		shardID:        "shard-0001",
+	})
+	if s.stream != "test-stream" {
 		t.Errorf("bad stream name")
 	}
 
-	if s.ShardID != ShardID("shard-0001") {
+	if s.shardID != ShardID("shard-0001") {
 		t.Errorf("bad ShardID")
 	}
 
-	if s.NextIteratorValue != nil {
+	if s.nextIterator != "" {
 		t.Errorf("bad NextIteratorValue")
-	}
-}
-
-func TestNewShardStreamReaderFromSequence(t *testing.T) {
-	svc := NullKinesisService{}
-
-	s := NewShardStreamReaderFromSequence(&svc, "test-stream", "shard-0001", "abc123")
-	if s.StreamName != "test-stream" {
-		t.Errorf("bad stream name")
-	}
-
-	if s.ShardID != "shard-0001" {
-		t.Errorf("bad ShardID")
-	}
-
-	if s.NextIteratorValue != nil {
-		t.Errorf("bad NextIteratorValue")
-	}
-
-	if *s.LastSequenceNumber != "abc123" {
-		t.Errorf("bad LastSequenceNumber")
-	}
-}
-
-func TestStreamWait(t *testing.T) {
-	svc := NullKinesisService{}
-	s := NewShardStreamReader(&svc, "test-stream", "shard-0000")
-
-	n := time.Now()
-	s.wait(100 * time.Millisecond)
-	if time.Since(n).Seconds() > 0.050 {
-		t.Errorf("Shouldn't have waited")
-	}
-
-	s.wait(100 * time.Millisecond)
-	if time.Since(n).Seconds() < 0.050 {
-		t.Errorf("Should have waited")
-	}
-
-}
-
-func TestFetchMoreRecords(t *testing.T) {
-	svc := newTestKinesisService()
-	st := newTestKinesisStream("test-stream")
-	s1 := newTestKinesisShard()
-
-	r1 := make(map[string]interface{})
-	s1.AddRecord(SequenceNumber("a"), r1)
-	st.AddShard("shard-0000", s1)
-	svc.AddStream(st)
-
-	s := NewShardStreamReader(svc, "test-stream", "shard-0000")
-
-	err := s.fetchMoreRecords()
-	if err != nil {
-		t.Errorf("Received error %v", err)
-		return
-	}
-
-	if len(s.records) != 1 {
-		t.Errorf("Should have a record")
 	}
 }
 
@@ -118,16 +60,21 @@ func TestRead(t *testing.T) {
 	st.AddShard("shard-0000", s1)
 	svc.AddStream(st)
 
-	s := NewShardStreamReader(svc, "test-stream", "shard-0000")
-
-	r, err := s.Get()
-	if err != nil {
+	s := newShardReader(&newShardReaderParams{
+		kinesisService: svc,
+		stream:         "test-stream",
+		shardID:        "shard-0000",
+	})
+	defer func() {
+		s.close <- true
+	}()
+	select {
+	case record := <-s.records:
+		if record == nil {
+			t.Errorf("Should be a record")
+		}
+	case err := <-s.errors:
 		t.Errorf("Received error %v", err)
-		return
-	}
-
-	if r == nil {
-		t.Errorf("Should be a record")
 	}
 }
 

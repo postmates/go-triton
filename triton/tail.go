@@ -108,7 +108,7 @@ func (t *TailAt) sendArchivedRecords() (lastMetadata *StreamMetadata, err error)
 				continue
 			}
 			for {
-				var rec map[string]interface{}
+				var rec Record
 				rec, err = archive.ReadRecord()
 				if err == io.EOF {
 					err = nil
@@ -140,28 +140,29 @@ func (t *TailAt) initStream() {
 		t.errors <- err
 		return
 	}
-	err = t.sendKinesisRecords(lastStreamMetadata)
-	if err != nil {
-		t.errors <- err
-	}
+	t.sendKinesisRecords(lastStreamMetadata)
 }
 
-func (t *TailAt) sendKinesisRecords(previousMetadata *StreamMetadata) (err error) {
-	shards, err := t.listShards()
-	if err != nil {
-		return
+func (t *TailAt) sendKinesisRecords(previousMetadata *StreamMetadata) {
+	shardToSequenceNumber := make(map[ShardID]SequenceNumber)
+	if previousMetadata != nil {
+		for k, v := range previousMetadata.Shards {
+			shardToSequenceNumber[k] = v.MaxSequenceNumber
+		}
 	}
 
-	// send all of the records in `startingKey`
-	// load metadata for starting key
-	// then send kinesis records
-	// load the sequenceNumbers for the last key
-	for _, shard := range shards {
-		var lastSequenceNumber SequenceNumber
-		if previousMetadata != nil && previousMetadata.Shards[shard] != nil {
-			lastSequenceNumber = previousMetadata.Shards[shard].MaxSequenceNumber
+	shardReader := NewMultiShardReader(&NewMultiShardReaderParams{
+		KinesisService:        t.kinesisService,
+		Stream:                t.stream,
+		ShardToSequenceNumber: shardToSequenceNumber,
+	})
+	for {
+		sr, err := shardReader.ReadShardRecord()
+		if err != nil {
+			t.errors <- err
+		} else {
+			t.records <- sr.Record
 		}
-		go t.sendKinesisRecordsForShard(shard, lastSequenceNumber)
 	}
 	return
 }
@@ -224,20 +225,6 @@ func (t *TailAt) getStreamIterator(shardID ShardID, startingSequenceNumber Seque
 		return
 	}
 	iteratorID = *getShardIteratorOutput.ShardIterator
-	return
-}
-
-// listShardsForStream helper method to list all the shards for a stream
-func (t *TailAt) listShards() (result []ShardID, err error) {
-	describeStreamOutput, err := t.kinesisService.DescribeStream(&kinesis.DescribeStreamInput{
-		StreamName: aws.String(t.stream),
-	})
-	if err != nil {
-		return
-	}
-	for _, shard := range describeStreamOutput.StreamDescription.Shards {
-		result = append(result, ShardID(*shard.ShardId))
-	}
 	return
 }
 

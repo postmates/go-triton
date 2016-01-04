@@ -12,15 +12,10 @@ import (
 	"time"
 )
 
-type ShardReaderCheckpointer interface {
-	ShardReader
-	Checkpoint() error
-}
-
 // A store manages buffering records together into files, and uploading them somewhere.
 type Store struct {
 	name           string
-	reader         ShardReaderCheckpointer
+	reader         StreamReader
 	streamMetadata *StreamMetadata
 
 	// Our uploaders manages sending our datafiles somewhere
@@ -171,7 +166,7 @@ func (s *Store) Put(b []byte) (err error) {
 		return
 	}
 
-	if s.buf.Len()+len(b) >= BUFFER_SIZE {
+	if s.buf.Len()+len(b) >= bufferSize {
 		s.flushBuffer()
 	}
 
@@ -187,31 +182,26 @@ func (s *Store) Close() (err error) {
 
 func (s *Store) Store() (err error) {
 	for {
-		// TODO: We're unmarshalling and then marshalling msgpack here when
-		// there is not real reason except that's a more useful general
-		// interface.  We should add another that is ReadRaw
-		shardRec, err := s.reader.ReadShardRecord()
+		var shardRec *ShardRecord
+		shardRec, err = s.reader.ReadShardRecord()
 		if err != nil {
 			if err == io.EOF {
-				break
-			} else {
-				return err
+				err = nil
 			}
 		}
 		s.streamMetadata.noteSequenceNumber(shardRec.ShardID, shardRec.SequenceNumber)
 		err = s.PutRecord(shardRec.Record)
 		if err != nil {
-			return err
+			return
 		}
 	}
-
-	return nil
+	return
 }
 
-const BUFFER_SIZE int = 1024 * 1024
+const bufferSize int = 1024 * 1024
 
-func NewStore(name string, r ShardReaderCheckpointer, up *S3Uploader) (s *Store) {
-	b := make([]byte, 0, BUFFER_SIZE)
+func NewStore(name string, r StreamReader, up *S3Uploader) (s *Store) {
+	b := make([]byte, 0, bufferSize)
 	buf := bytes.NewBuffer(b)
 
 	s = &Store{
