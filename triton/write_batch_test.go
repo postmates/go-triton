@@ -77,3 +77,30 @@ func TestBatchWriterTimeExceeded(t *testing.T) {
 		t.Fatal("Batcher did not write when time exceeded")
 	}
 }
+
+func TestBatchWriterFailed(t *testing.T) {
+	configString := bytes.NewBufferString(`
+  my_stream:
+    name: test-stream
+    partition_key: value
+    region: us-west-1
+  `)
+	c, _ := NewConfigFromFile(configString)
+	config, _ := c.ConfigForName("my_stream")
+
+	r := Record(map[string]interface{}{"value": "test-value"})
+	w := NewTestWriter(config, &FailingKinesisService{}, 1)
+	bw := NewBatchWriterSize(w, 1, 1*time.Hour)
+	bw.WriteRecords(r)
+
+	// wait for write -- this is technically a race condition
+	time.Sleep(1 * time.Millisecond)
+
+	select {
+	case <-bw.Errors():
+		// expected behavior
+	default:
+		t.Fatal("Write did not fail as expected")
+	}
+
+}
