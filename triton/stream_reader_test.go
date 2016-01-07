@@ -7,13 +7,13 @@ func TestNewStreamReader(t *testing.T) {
 	st := newTestKinesisStream("test-stream")
 	s1 := newTestKinesisShard()
 
-	r1 := make(map[string]interface{})
+	r1 := make(Record)
 	r1["value"] = "a"
 	s1.AddRecord(SequenceNumber("a"), r1)
 	st.AddShard(ShardID("0"), s1)
 
 	s2 := newTestKinesisShard()
-	r2 := make(map[string]interface{})
+	r2 := make(Record)
 	r2["value"] = "b"
 	s2.AddRecord(SequenceNumber("b"), r2)
 	st.AddShard(ShardID("1"), s2)

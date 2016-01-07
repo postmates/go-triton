@@ -22,7 +22,7 @@ type StreamReader interface {
 type multiShardStreamReader struct {
 	checkpointer Checkpointer
 	readers      []*ShardStreamReader
-	recStream    chan map[string]interface{}
+	recStream    chan Record
 	allWg        sync.WaitGroup
 	done         chan struct{}
 	quit         chan struct{}
@@ -37,7 +37,7 @@ func (msr *multiShardStreamReader) Checkpoint() (err error) {
 	return
 }
 
-func (msr *multiShardStreamReader) ReadRecord() (rec map[string]interface{}, err error) {
+func (msr *multiShardStreamReader) ReadRecord() (rec Record, err error) {
 	select {
 	case rec = <-msr.recStream:
 		return rec, nil
@@ -58,7 +58,7 @@ func NewStreamReader(svc KinesisService, streamName string, c Checkpointer) (sr 
 	msr := multiShardStreamReader{
 		c,
 		make([]*ShardStreamReader, 0),
-		make(chan map[string]interface{}),
+		make(chan Record),
 		sync.WaitGroup{},
 		make(chan struct{}),
 		make(chan struct{}, maxShards),
@@ -118,7 +118,7 @@ func NewStreamReader(svc KinesisService, streamName string, c Checkpointer) (sr 
 	return
 }
 
-func processStreamToChan(r *ShardStreamReader, recChan chan map[string]interface{}, done chan struct{}) {
+func processStreamToChan(r *ShardStreamReader, recChan chan Record, done chan struct{}) {
 	for {
 		select {
 		case <-done:

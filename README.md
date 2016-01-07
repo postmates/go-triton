@@ -4,13 +4,13 @@ Triton is an opinionated set of tooling for building a data pipeline around an
 AWS stack including [Kinesis](http://aws.amazon.com/kinesis/) and S3.
 
 It provides the necessary glue for building real applications on top of the
-type of architecture. 
+type of architecture.
 
 ## Overview ##
 
 As your application collects data, write it to Kinesis streams as a series of
 events. Other applications in your infrastructure read from this stream
-providing a solid pattern for services to share data. 
+providing a solid pattern for services to share data.
 
 Triton aims to provide a level of tooling, glue and utility to make this
 ecosystem easy to use. Namely:
@@ -200,4 +200,4 @@ Standard go build commands of course also work.
 
   * Metrics/Reporting hooks for easier status checks
   * Better handle Kinesis shard splitting and combining
-  * Better patterns for dealing with arbitrary `map[string]interface{}` data
+  * Better patterns for dealing with arbitrary `Record` data

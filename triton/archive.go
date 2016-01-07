@@ -24,7 +24,7 @@ type StoreArchive struct {
 	rdr   Reader
 }
 
-func (sa *StoreArchive) ReadRecord() (rec map[string]interface{}, err error) {
+func (sa *StoreArchive) ReadRecord() (rec Record, err error) {
 	if sa.rdr == nil {
 		out, err := sa.s3Svc.GetObject(&s3.GetObjectInput{
 			Bucket: aws.String(sa.Bucket),

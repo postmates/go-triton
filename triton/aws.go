@@ -17,6 +17,7 @@ type KinesisService interface {
 	DescribeStream(*kinesis.DescribeStreamInput) (*kinesis.DescribeStreamOutput, error)
 	GetShardIterator(*kinesis.GetShardIteratorInput) (*kinesis.GetShardIteratorOutput, error)
 	GetRecords(*kinesis.GetRecordsInput) (*kinesis.GetRecordsOutput, error)
+	PutRecords(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error)
 }
 
 type S3Service interface {

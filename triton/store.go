@@ -141,7 +141,7 @@ func (s *Store) flushBuffer() (err error) {
 	return
 }
 
-func (s *Store) PutRecord(rec map[string]interface{}) (err error) {
+func (s *Store) PutRecord(rec Record) (err error) {
 	// TODO: Looks re-usable
 	b := make([]byte, 0, 1024)
 	b, err = msgp.AppendMapStrIntf(b, rec)
