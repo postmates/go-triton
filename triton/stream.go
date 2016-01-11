@@ -3,6 +3,7 @@ package triton
 import (
 	"fmt"
 	"log"
+	"math"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -35,7 +36,7 @@ type ShardStreamReader struct {
 // Recommended minimum polling interval to keep from overloading a Kinesis
 // shard.
 const minPollInterval = 1.0 * time.Second
-const maxRetries = 3
+const maxRetries = 4
 
 func (s *ShardStreamReader) initIterator() (err error) {
 	gsi := kinesis.GetShardIteratorInput{
@@ -59,7 +60,7 @@ func (s *ShardStreamReader) initIterator() (err error) {
 
 func (s *ShardStreamReader) wait(minInterval time.Duration) {
 	if s.lastRequest != nil {
-		retryDelay := time.Duration(s.retries*250) * time.Millisecond
+		retryDelay := time.Duration(math.Pow(float64(s.retries), 2)*250) * time.Millisecond
 
 		sleepTime := (minInterval - time.Since(*s.lastRequest)) + retryDelay
 		if sleepTime >= time.Duration(0) {
