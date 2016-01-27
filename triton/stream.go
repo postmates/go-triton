@@ -35,7 +35,8 @@ type ShardStreamReader struct {
 
 // Recommended minimum polling interval to keep from overloading a Kinesis
 // shard.
-const minPollInterval = 1.0 * time.Second
+var MinPollInterval = 1.0 * time.Second
+
 const maxRetries = 4
 
 func (s *ShardStreamReader) initIterator() (err error) {
@@ -109,7 +110,7 @@ func (s *ShardStreamReader) isRetryError(err error) bool {
 }
 
 func (s *ShardStreamReader) fetchMoreRecords() (err error) {
-	s.wait(minPollInterval)
+	s.wait(MinPollInterval)
 
 	if s.NextIteratorValue == nil {
 		err := s.initIterator()
