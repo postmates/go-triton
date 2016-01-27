@@ -20,7 +20,7 @@ const maxRetryDuration = 5 * time.Second
 func NewStream(region, name string) (*Stream, error) {
 	sess := session.New(&aws.Config{Region: aws.String(region)})
 	svc := kinesis.New(sess)
-	return NewStreamShardsService(region, name, nil)
+	return NewStreamShardsService(svc, region, name, nil)
 }
 
 // NewStreamShardsService returns a Stream configured to the specified shards

@@ -19,7 +19,7 @@ type CheckpointService interface {
 // A store manages buffering records together into files, and uploading them somewhere.
 type Store struct {
 	name   string
-	reader StreamReader
+	reader *Stream
 
 	// Our uploaders manages sending our datafiles somewhere
 	uploader *S3Uploader

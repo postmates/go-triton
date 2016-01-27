@@ -8,8 +8,8 @@ import (
 )
 
 type Checkpointer interface {
-	Checkpoint(ShardID, SequenceNumber) error
-	LastSequenceNumber(ShardID) (SequenceNumber, error)
+	Checkpoint(string, string) error
+	LastSequenceNumber(string) (string, error)
 }
 
 // A checkpointer manages saving and loading savepoints for reading from a
@@ -24,7 +24,7 @@ type dbCheckpointer struct {
 }
 
 // Stores the provided recent sequence number
-func (c *dbCheckpointer) Checkpoint(sid ShardID, sn SequenceNumber) (err error) {
+func (c *dbCheckpointer) Checkpoint(sid string, sn string) (err error) {
 	txn, err := c.db.Begin()
 	if err != nil {
 		return err
@@ -76,20 +76,11 @@ func (c *dbCheckpointer) Checkpoint(sid ShardID, sn SequenceNumber) (err error) 
 }
 
 // Returns the most recently checkpointed sequence number
-func (c *dbCheckpointer) LastSequenceNumber(sid ShardID) (sn SequenceNumber, err error) {
+func (c *dbCheckpointer) LastSequenceNumber(sid string) (string, error) {
 	seqNum := ""
-	err = c.db.QueryRow("SELECT seq_num FROM triton_checkpoint WHERE client=$1 AND stream=$2 AND shard=$3",
+	err := c.db.QueryRow("SELECT seq_num FROM triton_checkpoint WHERE client=$1 AND stream=$2 AND shard=$3",
 		c.clientName, c.streamName, string(sid)).Scan(&seqNum)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return "", nil
-		} else {
-			return
-		}
-	}
-	sn = SequenceNumber(seqNum)
-
-	return
+	return seqNum, err
 }
 
 const CREATE_TABLE_STMT = `

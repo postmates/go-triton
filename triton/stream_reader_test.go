@@ -9,14 +9,14 @@ func TestNewStreamReader(t *testing.T) {
 
 	r1 := make(Record)
 	r1["value"] = "a"
-	s1.AddRecord(SequenceNumber("a"), r1)
-	st.AddShard(ShardID("0"), s1)
+	s1.AddRecord("a", r1)
+	st.AddShard("0", s1)
 
 	s2 := newTestKinesisShard()
 	r2 := make(Record)
 	r2["value"] = "b"
-	s2.AddRecord(SequenceNumber("b"), r2)
-	st.AddShard(ShardID("1"), s2)
+	s2.AddRecord("b", r2)
+	st.AddShard("1", s2)
 
 	svc.AddStream(st)
 
@@ -68,13 +68,13 @@ func TestNewStreamReader(t *testing.T) {
 
 	sr.Checkpoint()
 
-	c1, err := c.LastSequenceNumber(ShardID("0"))
-	if c1 != SequenceNumber("a") {
+	c1, err := c.LastSequenceNumber("0")
+	if c1 != "a" {
 		t.Error("Bad sequence number", c1)
 	}
 
-	c2, err := c.LastSequenceNumber(ShardID("1"))
-	if c2 != SequenceNumber("b") {
+	c2, err := c.LastSequenceNumber("1")
+	if c2 != "b" {
 		t.Error("Bad sequence number", c2)
 	}
 

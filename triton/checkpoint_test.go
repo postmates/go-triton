@@ -55,7 +55,7 @@ func TestCheckpoint(t *testing.T) {
 	db := openTestDB()
 	defer closeTestDB(db)
 
-	sid := ShardID("shardId-0000")
+	sid := "shardId-0000"
 	c, _ := NewCheckpointer("test", "test-stream", db)
 
 	err := c.Checkpoint(sid, "1234")
@@ -80,7 +80,7 @@ func TestCheckpointUpdate(t *testing.T) {
 	db := openTestDB()
 	defer closeTestDB(db)
 
-	sid := ShardID("shardId-0000")
+	sid := "shardId-0000"
 
 	c, _ := NewCheckpointer("test", "test-stream", db)
 
@@ -112,7 +112,7 @@ func TestEmptyLastSequenceNumber(t *testing.T) {
 	db := openTestDB()
 	defer closeTestDB(db)
 
-	sid := ShardID("shardId-0000")
+	sid := "shardId-0000"
 
 	c, _ := NewCheckpointer("test", "test-stream", db)
 
@@ -130,7 +130,7 @@ func TestStats(t *testing.T) {
 	db := openTestDB()
 	defer closeTestDB(db)
 
-	sid := ShardID("shardId-0000")
+	sid := "shardId-0000"
 
 	c, _ := NewCheckpointer("test", "test-stream", db)
 

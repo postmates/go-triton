@@ -15,7 +15,7 @@ import (
 )
 
 type testKinesisRecords struct {
-	sn         SequenceNumber
+	sn         string
 	recordData [][]byte
 }
 
@@ -23,7 +23,7 @@ type testKinesisShard struct {
 	records []testKinesisRecords
 }
 
-func (s *testKinesisShard) AddRecord(sn SequenceNumber, rec Record) {
+func (s *testKinesisShard) AddRecord(sn string, rec Record) {
 	b := bytes.NewBuffer(make([]byte, 0, 1024))
 	w := msgp.NewWriter(b)
 	err := w.WriteMapStrIntf(rec)
@@ -34,18 +34,18 @@ func (s *testKinesisShard) AddRecord(sn SequenceNumber, rec Record) {
 	s.AddData(sn, b.Bytes())
 }
 
-func (s *testKinesisShard) AddData(sn SequenceNumber, data []byte) {
+func (s *testKinesisShard) AddData(sn string, data []byte) {
 	rs := testKinesisRecords{sn, [][]byte{data}}
 	s.records = append(s.records, rs)
 }
 
-func (s *testKinesisShard) PopData() (SequenceNumber, []byte) {
+func (s *testKinesisShard) PopData() (string, []byte) {
 	r := s.records[0]
 	s.records = s.records[1:]
 	return r.sn, r.recordData[0]
 }
 
-func (s *testKinesisShard) PopRecord() (SequenceNumber, Record) {
+func (s *testKinesisShard) PopRecord() (string, Record) {
 	sn, data := s.PopData()
 
 	b := bytes.NewBuffer(data)
@@ -57,8 +57,8 @@ func (s *testKinesisShard) PopRecord() (SequenceNumber, Record) {
 	return sn, r
 }
 
-func (s *testKinesisShard) NextSequenceNumber() SequenceNumber {
-	return SequenceNumber(time.Now().String())
+func (s *testKinesisShard) NextSequenceNumber() string {
+	return time.Now().String()
 }
 
 func newTestKinesisShard() *testKinesisShard {
@@ -67,15 +67,15 @@ func newTestKinesisShard() *testKinesisShard {
 
 type testKinesisStream struct {
 	StreamName string
-	shards     map[ShardID]*testKinesisShard
+	shards     map[string]*testKinesisShard
 }
 
-func (s *testKinesisStream) AddShard(sid ShardID, ts *testKinesisShard) {
+func (s *testKinesisStream) AddShard(sid string, ts *testKinesisShard) {
 	s.shards[sid] = ts
 }
 
 func newTestKinesisStream(name string) *testKinesisStream {
-	return &testKinesisStream{name, make(map[ShardID]*testKinesisShard)}
+	return &testKinesisStream{name, make(map[string]*testKinesisShard)}
 }
 
 type testKinesisService struct {
@@ -111,7 +111,7 @@ func (s *testKinesisService) GetRecords(gri *kinesis.GetRecordsInput) (*kinesis.
 		return nil, fmt.Errorf("Failed to find stream")
 	}
 
-	shard, ok := stream.shards[ShardID(shardID)]
+	shard, ok := stream.shards[shardID]
 	if !ok {
 		return nil, fmt.Errorf("Failed to find shard")
 	}
@@ -119,7 +119,7 @@ func (s *testKinesisService) GetRecords(gri *kinesis.GetRecordsInput) (*kinesis.
 	// For our mock implementation, we just assume iterator == sequence number
 	nextSn := ""
 	for _, r := range shard.records {
-		if r.sn > SequenceNumber(sn) {
+		if r.sn > sn {
 			for _, rd := range r.recordData {
 				records = append(records, &kinesis.Record{SequenceNumber: aws.String(string(r.sn)), Data: rd})
 			}
@@ -177,7 +177,7 @@ func (s *testKinesisService) PutRecords(input *kinesis.PutRecordsInput) (*kinesi
 
 	records := make([]*kinesis.PutRecordsResultEntry, len(input.Records))
 	for i, r := range input.Records {
-		shard, ok := stream.shards[ShardID(*r.PartitionKey)]
+		shard, ok := stream.shards[*r.PartitionKey]
 		if !ok {
 			return nil, fmt.Errorf("Failed to find shard")
 		}

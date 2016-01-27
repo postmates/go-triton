@@ -69,7 +69,7 @@ func TestNewShardStreamReader(t *testing.T) {
 		t.Errorf("bad stream name")
 	}
 
-	if s.ShardID != ShardID("shard-0001") {
+	if s.ShardID != "shard-0001" {
 		t.Errorf("bad ShardID")
 	}
 
@@ -122,7 +122,7 @@ func TestFetchMoreRecords(t *testing.T) {
 	s1 := newTestKinesisShard()
 
 	r1 := make(Record)
-	s1.AddRecord(SequenceNumber("a"), r1)
+	s1.AddRecord("a", r1)
 	st.AddShard("shard-0000", s1)
 	svc.AddStream(st)
 
@@ -165,7 +165,7 @@ func TestRead(t *testing.T) {
 	s1 := newTestKinesisShard()
 
 	r1 := make(Record)
-	s1.AddRecord(SequenceNumber("a"), r1)
+	s1.AddRecord("a", r1)
 	st.AddShard("shard-0000", s1)
 	svc.AddStream(st)
 
@@ -187,10 +187,10 @@ func TestListShards(t *testing.T) {
 	st := newTestKinesisStream("test-stream")
 
 	s1 := newTestKinesisShard()
-	st.AddShard(ShardID("0"), s1)
+	st.AddShard("0", s1)
 
 	s2 := newTestKinesisShard()
-	st.AddShard(ShardID("1"), s2)
+	st.AddShard("1", s2)
 
 	svc.AddStream(st)
 
@@ -208,9 +208,9 @@ func TestListShards(t *testing.T) {
 	found1 := false
 
 	for _, sid := range shards {
-		if sid == ShardID("0") {
+		if sid == "0" {
 			found0 = true
-		} else if sid == ShardID("1") {
+		} else if sid == "1" {
 			found1 = true
 		}
 	}
