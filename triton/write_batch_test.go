@@ -19,7 +19,7 @@ func TestBatchWriterSizeExceeded(t *testing.T) {
 	svc := newTestKinesisService()
 	st := newTestKinesisStream(config.StreamName)
 	s1 := newTestKinesisShard()
-	st.AddShard(ShardID("test-value"), s1)
+	st.AddShard("test-value", s1)
 	svc.AddStream(st)
 
 	w := NewTestWriter(config, svc, 1)
@@ -56,7 +56,7 @@ func TestBatchWriterTimeExceeded(t *testing.T) {
 	svc := newTestKinesisService()
 	st := newTestKinesisStream(config.StreamName)
 	s1 := newTestKinesisShard()
-	st.AddShard(ShardID("test-value"), s1)
+	st.AddShard("test-value", s1)
 	svc.AddStream(st)
 
 	w := NewTestWriter(config, svc, 1)
