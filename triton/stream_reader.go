@@ -1,162 +1,141 @@
 package triton
 
 import (
-	"fmt"
-	"io"
-	"log"
 	"sync"
+	"time"
 
-	"github.com/tinylib/msgp/msgp"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/kinesis"
+	"github.com/cenkalti/backoff"
 )
 
-// A StreamReader is a higher-level interface for reading data from a live Triton stream.
+const maxRetries = 4
+const initialRetryInterval = 50 * time.Millisecond
+const maxRetryDuration = 5 * time.Second
+
+// NewStream returns a stream configured for all shards using env variables
+// to determine the Kinesis Service.
+func NewStream(region, name string) (*Stream, error) {
+	sess := session.New(&aws.Config{Region: aws.String(region)})
+	svc := kinesis.New(sess)
+	return NewStreamShardsService(region, name, nil)
+}
+
+// NewStreamShardsService returns a Stream configured to the specified shards
+// using the specificed Kinesis service.
 //
-// By implementing a Reader interface, we can delivery processed triton data to the client.
-// In addition, we provide checkpointing service.
-type StreamReader interface {
-	Reader
-	Checkpoint() error
-	Stop()
-}
-
-type multiShardStreamReader struct {
-	checkpointer Checkpointer
-	readers      []*ShardStreamReader
-	recStream    chan Record
-	allWg        sync.WaitGroup
-	done         chan struct{}
-	quit         chan struct{}
-}
-
-func (msr *multiShardStreamReader) Checkpoint() (err error) {
-	for _, r := range msr.readers {
-		if r.LastSequenceNumber != nil {
-			err = msr.checkpointer.Checkpoint(r.ShardID, *r.LastSequenceNumber)
-		}
-	}
-	return
-}
-
-func (msr *multiShardStreamReader) ReadRecord() (rec Record, err error) {
-	select {
-	case rec = <-msr.recStream:
-		return rec, nil
-	case <-msr.done:
-		return nil, io.EOF
-	}
-}
-
-func (msr *multiShardStreamReader) Stop() {
-	msr.quit <- struct{}{}
-	log.Println("Triggered stop, waiting to complete")
-	msr.allWg.Wait()
-}
-
-const maxShards int = 100
-
-func NewStreamReader(svc KinesisService, streamName string, c Checkpointer) (sr StreamReader, err error) {
-	msr := multiShardStreamReader{
-		c,
-		make([]*ShardStreamReader, 0),
-		make(chan Record),
-		sync.WaitGroup{},
-		make(chan struct{}),
-		make(chan struct{}, maxShards),
-	}
-
-	shards, err := ListShards(svc, streamName)
-	if err != nil {
-		return
-	}
-
-	if len(shards) == 0 {
-		return nil, fmt.Errorf("No shards found")
-	}
-
-	sr = &msr
-
-	if len(shards) > maxShards {
-		// We reserve some data structures. That's a lot of shards
-		panic("Too many shards")
-	}
-
-	for _, sid := range shards {
-		sn, err := c.LastSequenceNumber(sid)
+// If no shards are given, the stream will be configured to return from all
+// shards for a given stream.
+func NewStreamShardsService(svc KinesisService, region, name string, shards []string) (*Stream, error) {
+	if shards == nil || len(shards) == 0 {
+		req := &kinesis.DescribeStreamInput{StreamName: aws.String(name)}
+		resp, err := svc.DescribeStream(req)
 		if err != nil {
 			return nil, err
 		}
-		var shardStream *ShardStreamReader
-		if sn == "" {
-			shardStream = NewShardStreamReader(svc, streamName, sid)
-		} else {
-			shardStream = NewShardStreamReaderFromSequence(svc, streamName, sid, sn)
-		}
 
-		msr.readers = append(msr.readers, shardStream)
-
-		go func(shardStream *ShardStreamReader) {
-			msr.allWg.Add(1)
-			defer msr.allWg.Done()
-
-			log.Printf("Starting stream processing for %s:%s", shardStream.StreamName, shardStream.ShardID)
-			processStreamToChan(shardStream, msr.recStream, msr.done)
-
-			msr.quit <- struct{}{}
-		}(shardStream)
-	}
-
-	go func() {
-		<-msr.quit
-		log.Println("Stop triggered, shutdown starting.")
-
-		// Closing the done channel will cause all the worker routines to shutdown.
-		// But we can't close a channel more than once, so we'll control access
-		// to it via the quit channel.
-		close(msr.done)
-	}()
-
-	return
-}
-
-func processStreamToChan(r *ShardStreamReader, recChan chan Record, done chan struct{}) {
-	for {
-		select {
-		case <-done:
-			return
-		default:
-		}
-
-		kRec, err := r.Get()
-		if err != nil {
-			log.Println("Error reading record", err)
-			return
-		}
-
-		// this indicates there were no more records. Rather than block
-		// forever, the ShardStreamReader graciously gives us the opportunity
-		// to change our minds.
-		if kRec == nil {
-			continue
-		}
-
-		rec, eb, err := msgp.ReadMapStrIntfBytes(kRec.Data, nil)
-		if err != nil {
-			// This will end the stream. If this ever happens, we might need
-			// some way to repair the stream.
-			log.Println("Failed to decode record from stream", err)
-			return
-		}
-		if len(eb) > 0 {
-			log.Println("Extra bytes in stream record", len(eb))
-			return
-		}
-
-		select {
-		case recChan <- rec:
-		case <-done:
-			return
+		shards = make([]string, len(resp.StreamDescription.Shards))
+		for idx, s := range resp.StreamDescription.Shards {
+			shards[idx] = *s.ShardId
 		}
 	}
+
+	return &Stream{
+		region:   region,
+		name:     name,
+		shardIDs: shards,
+		service:  svc,
+	}, nil
 }
 
-// TODO: An interface to choose shards
+type Stream struct {
+	region   string
+	name     string
+	shardIDs []string
+
+	seqNums  map[string]string // shardID -> seqNums
+	shardIdx int               // allow for round robin reads
+	lock     *sync.RWMutex     // only serial read allowed
+
+	service KinesisService // Interactions with Kinesis
+}
+
+// Read records from a stream.
+//
+// Read will iterate through shards in a round robin fashion and return at most
+// len(p) records from a single round.
+func (s *Stream) Read(p []Record) (int, error) {
+	s.lock.Lock()
+
+	n := 0
+	for reads := 0; reads < len(s.shardIDs) && n <= len(p); reads++ {
+		nextShardIdx := s.shardIdx % len(s.shardIDs)
+		nShard, err := s.readShard(s.shardIDs[nextShardIdx], p[n:len(p)])
+		n += nShard
+
+		if err != nil {
+			return n, err
+		}
+	}
+
+	s.lock.Unlock()
+	return n, nil
+}
+
+func (s *Stream) Seek(shardID, sequenceNumber string) {
+	s.lock.Lock()
+	s.seqNums[shardID] = sequenceNumber
+	s.lock.Unlock()
+}
+
+func (s *Stream) Shards() []string {
+	return s.shardIDs
+}
+
+func (s *Stream) SequenceNumber(shard string) string {
+	s.lock.RLock()
+	sn := s.seqNums[shard]
+	s.lock.RUnlock()
+	return sn
+}
+
+func (s *Stream) readShard(shard string, p []Record) (int, error) {
+	gri := &kinesis.GetRecordsInput{
+		Limit:         aws.Int64(int64(len(p))), // read at most buffer
+		ShardIterator: aws.String(s.SequenceNumber(shard)),
+	}
+
+	retries := 0
+	eb := backoff.NewExponentialBackOff()
+	eb.InitialInterval = initialRetryInterval
+	eb.MaxElapsedTime = maxRetryDuration
+
+	// Request loop (if retry)
+REQUEST:
+	gro, err := s.service.GetRecords(gri)
+
+	awsErr := err.(awserr.Error)
+	if err != nil && retries < maxRetries &&
+		(awsErr.Code() == "ProvisionedThroughputExceededException" ||
+			awsErr.Code() == "ServiceUnavailable" ||
+			awsErr.Code() == "InternalFailure" ||
+			awsErr.Code() == "Throttling") {
+		time.Sleep(eb.NextBackOff()) // wait to try again
+		retries++
+		goto REQUEST
+	} else if err != nil {
+		return 0, err
+	}
+
+	// Convert records from []byte -> Record
+	for idx, raw := range gro.Records {
+		if p[idx], err = UnmarshalRecord(raw.Data); err != nil {
+			return idx, err
+		}
+	}
+
+	s.seqNums[shard] = *gro.NextShardIterator
+	return len(gro.Records), nil
+}
