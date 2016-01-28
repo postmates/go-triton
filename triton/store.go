@@ -12,17 +12,12 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
-type CheckpointService interface {
-	Checkpoint(string) error
-}
-
 // A store manages buffering records together into files, and uploading them somewhere.
 type Store struct {
-	name   string
-	reader *Stream
+	name string
 
 	// Our uploaders manages sending our datafiles somewhere
-	uploader *S3Uploader
+	uploader *s3Uploader
 
 	currentLogTime  time.Time
 	currentWriter   io.WriteCloser
@@ -48,7 +43,7 @@ func (s *Store) closeWriter() error {
 		s.currentWriter = nil
 
 		if s.uploader != nil {
-			err = s.uploader.Upload(*s.currentFilename, s.generateKeyname())
+			err = s.uploader.upload(*s.currentFilename, s.generateKeyname())
 			if err != nil {
 				log.Println("Failed to upload:", err)
 				return fmt.Errorf("Failed to upload")
@@ -64,7 +59,8 @@ func (s *Store) closeWriter() error {
 
 		s.currentFilename = nil
 
-		s.reader.Checkpoint()
+		// FIXME: do this somewhere else
+		// s.reader.Checkpoint()
 	}
 
 	return nil
@@ -175,38 +171,36 @@ func (s *Store) Close() (err error) {
 	return
 }
 
-func (s *Store) Store() (err error) {
+func (s *Store) Store(stream *Stream, chunkSize int) error {
+	buffer := make([]Record, chunkSize)
+
 	for {
 		// TODO: We're unmarshalling and then marshalling msgpack here when
 		// there is not real reason except that's a more useful general
 		// interface.  We should add another that is ReadRaw
-		rec, err := s.reader.ReadRecord()
-		if err != nil {
-			if err == io.EOF {
-				break
-			} else {
-				return err
-			}
-		}
-
-		err = s.PutRecord(rec)
+		n, err := stream.Read(buffer)
 		if err != nil {
 			return err
 		}
-	}
 
-	return nil
+		// Write to store
+		for _, rec := range buffer[:n] {
+			err = s.PutRecord(rec)
+			if err != nil {
+				return err
+			}
+		}
+	}
 }
 
 const BUFFER_SIZE int = 1024 * 1024
 
-func NewStore(name string, r StreamReader, up *S3Uploader) (s *Store) {
+func NewStore(name string, up *s3Uploader) (s *Store) {
 	b := make([]byte, 0, BUFFER_SIZE)
 	buf := bytes.NewBuffer(b)
 
 	s = &Store{
 		name:     name,
-		reader:   r,
 		buf:      buf,
 		uploader: up,
 	}

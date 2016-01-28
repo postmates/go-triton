@@ -8,28 +8,28 @@ import (
 
 func TestNewArchive(t *testing.T) {
 	key := "20150801/test_stream-archive-123455.tri"
-	sa, err := NewStoreArchive("foo", key, nil)
+	sa, err := newStoreArchive("foo", key, nil)
 	if err != nil {
 		t.Fatal("Error creating sa", err)
 	}
 
-	if sa.Key != key {
+	if sa.key != key {
 		t.Error("Failed to store key")
 	}
 
-	if sa.StreamName != "test_stream" {
-		t.Error("StreamName mismatch", sa.StreamName)
+	if sa.streamName != "test_stream" {
+		t.Error("StreamName mismatch", sa.streamName)
 	}
 
-	if sa.ClientName != "archive" {
+	if sa.clientName != "archive" {
 		t.Error("Should have a client name")
 	}
 
 	if sa.T != time.Date(2015, time.August, 1, 0, 0, 0, 0, time.UTC) {
-		t.Error("StreamName mismatch", sa.StreamName)
+		t.Error("StreamName mismatch", sa.streamName)
 	}
 
-	if sa.Bucket != "foo" {
+	if sa.bucket != "foo" {
 		t.Error("bucket name mismatch")
 	}
 
@@ -39,21 +39,21 @@ func TestNewArchive(t *testing.T) {
 }
 
 func TestNewArchiveShard(t *testing.T) {
-	sa, err := NewStoreArchive("foo", "20150801/test_stream-store_test-123455.tri", nil)
+	sa, err := newStoreArchive("foo", "20150801/test_stream-store_test-123455.tri", nil)
 	if err != nil {
 		t.Fatal("Error creating sa", err)
 	}
 
-	if sa.StreamName != "test_stream" {
-		t.Error("StreamName mismatch", sa.StreamName)
+	if sa.streamName != "test_stream" {
+		t.Error("StreamName mismatch", sa.streamName)
 	}
 
-	if sa.ClientName != "store_test" {
+	if sa.clientName != "store_test" {
 		t.Error("Should have a client name")
 	}
 
 	if sa.T != time.Date(2015, time.August, 1, 0, 0, 0, 0, time.UTC) {
-		t.Error("StreamName mismatch", sa.StreamName)
+		t.Error("StreamName mismatch", sa.streamName)
 	}
 
 	if sa.SortValue != 123455 {
@@ -62,12 +62,12 @@ func TestNewArchiveShard(t *testing.T) {
 }
 
 func TestReadEmpty(t *testing.T) {
-	sa, err := NewStoreArchive("foo", "20150801/test_stream-store_test-123455.tri", &nullS3Service{})
+	sa, err := newStoreArchive("foo", "20150801/test_stream-store_test-123455.tri", &nullS3Service{})
 	if err != nil {
 		t.Fatal("Error creating sa", err)
 	}
 
-	_, err = sa.ReadRecord()
+	_, err = sa.Read(nil)
 	if err != io.EOF {
 		t.Fatal("Should have EOF: ", err)
 	}

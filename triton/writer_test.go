@@ -27,7 +27,7 @@ func TestWriteRecords(t *testing.T) {
 	svc := newTestKinesisService()
 	st := newTestKinesisStream(config.StreamName)
 	s1 := newTestKinesisShard()
-	st.AddShard(ShardID("test-value"), s1)
+	st.AddShard("test-value", s1)
 	svc.AddStream(st)
 
 	r := Record(map[string]interface{}{"value": "test-value"})
@@ -53,7 +53,7 @@ func TestWriteRecordsFailing(t *testing.T) {
 	config, _ := c.ConfigForName("my_stream")
 
 	r := Record(map[string]interface{}{"value": "test-value"})
-	w := NewTestWriter(config, &FailingKinesisService{}, 1)
+	w := NewTestWriter(config, &failingKinesisService{}, 1)
 	if err := w.WriteRecords(r); err == nil {
 		t.Fatal("Write did not fail as expected")
 	}

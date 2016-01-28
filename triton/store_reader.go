@@ -2,12 +2,14 @@ package triton
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"sort"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/tinylib/msgp/msgp"
 )
 
 func listDatesFromRange(start, end time.Time) (dates []time.Time) {
@@ -28,32 +30,9 @@ func listDatesFromRange(start, end time.Time) (dates []time.Time) {
 	return
 }
 
-// Sortable list of store archives.
-//
-// Though archives, when they come out of S3 are lexigraphically sorted, we
-// want to just be sure that we're really handling our dates and times
-// correctly.
-type StoreArchiveList []StoreArchive
-
-func (l StoreArchiveList) Len() int {
-	return len(l)
-}
-
-func (l StoreArchiveList) Swap(i, j int) {
-	l[i], l[j] = l[j], l[i]
-}
-
-func (l StoreArchiveList) Less(i, j int) bool {
-	if l[i].T != l[j].T {
-		return l[i].T.Before(l[j].T)
-	} else {
-		return l[i].SortValue < l[j].SortValue
-	}
-}
-
 func NewStoreReader(svc S3Service, bucketName, clientName, streamName string, startDate, endDate time.Time) (Reader, error) {
 	allDates := listDatesFromRange(startDate, endDate)
-	archives := make(StoreArchiveList, 0, len(allDates))
+	archives := make(storeArchiveList, 0, len(allDates))
 
 	for _, date := range allDates {
 		dateStr := date.Format("20060102")
@@ -72,7 +51,7 @@ func NewStoreReader(svc S3Service, bucketName, clientName, streamName string, st
 
 		for _, o := range resp.Contents {
 			log.Println("Opening store archive", *o.Key)
-			sa, err := NewStoreArchive(bucketName, *o.Key, svc)
+			sa, err := newStoreArchive(bucketName, *o.Key, svc)
 			if err != nil {
 				log.Println("Failed to parse contents", *o.Key, err)
 				continue
@@ -90,22 +69,37 @@ func NewStoreReader(svc S3Service, bucketName, clientName, streamName string, st
 	foundClientName := clientName
 	for _, a := range archives {
 		if foundClientName == "" {
-			foundClientName = a.ClientName
+			foundClientName = a.clientName
 		}
 
-		if foundClientName != a.ClientName {
-			return nil, fmt.Errorf("Multiple clients found: %s and %s", foundClientName, a.ClientName)
+		if foundClientName != a.clientName {
+			return nil, fmt.Errorf("Multiple clients found: %s and %s", foundClientName, a.clientName)
 		}
 	}
 
 	sort.Sort(archives)
 
-	// Convert to a list of Readers... feels like there should be a better way
-	// here. Is this what generics are for? Or is there an interface for a list?
-	readers := make([]Reader, len(archives))
-	for i := range archives {
-		readers[i] = &archives[i]
+	// cast to io.Readers
+	readers := make([]io.Reader, len(archives))
+	for idx, archive := range archives {
+		readers[idx] = io.Reader(archive)
 	}
 
-	return NewSerialReader(readers), nil
+	return &storeReader{
+		reader: io.MultiReader(readers...),
+	}, nil
+}
+
+type storeReader struct {
+	reader io.Reader
+}
+
+func (sr *storeReader) Read(p []Record) (int, error) {
+	r := msgp.NewReader(sr.reader)
+	for i := 0; i < len(p); i++ {
+		if err := r.ReadMapStrIntf(p[i]); err != nil {
+			return i, err
+		}
+	}
+	return len(p), nil
 }

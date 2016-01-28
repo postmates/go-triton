@@ -89,7 +89,7 @@ func TestBatchWriterFailed(t *testing.T) {
 	config, _ := c.ConfigForName("my_stream")
 
 	r := Record(map[string]interface{}{"value": "test-value"})
-	w := NewTestWriter(config, &FailingKinesisService{}, 1)
+	w := NewTestWriter(config, &failingKinesisService{}, 1)
 	bw := NewBatchWriterSize(w, 1, 1*time.Hour)
 	bw.WriteRecords(r)
 

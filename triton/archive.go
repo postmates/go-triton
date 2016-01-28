@@ -2,6 +2,7 @@ package triton
 
 import (
 	"fmt"
+	"io"
 	"regexp"
 	"strings"
 	"time"
@@ -10,39 +11,55 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 )
 
-// A StoreArchive represents an instance of a data file stored, usually, in S3.
-type StoreArchive struct {
-	StreamName string
-	Bucket     string
-	Key        string
-	ClientName string
+// Sortable list of store archives.
+//
+// Though archives, when they come out of S3 are lexigraphically sorted, we
+// want to just be sure that we're really handling our dates and times
+// correctly.
+type storeArchiveList []*storeArchive
 
-	T         time.Time
-	SortValue int
-
-	s3Svc S3Service
-	rdr   Reader
+func (l storeArchiveList) Len() int      { return len(l) }
+func (l storeArchiveList) Swap(i, j int) { l[i], l[j] = l[j], l[i] }
+func (l storeArchiveList) Less(i, j int) bool {
+	if l[i].t != l[j].t {
+		return l[i].t.Before(l[j].t)
+	}
+	return l[i].sortValue < l[j].sortValue
 }
 
-func (sa *StoreArchive) ReadRecord() (rec Record, err error) {
-	if sa.rdr == nil {
+// storeArchive represents an instance of a data file stored, usually, in S3.
+type storeArchive struct {
+	streamName string
+	bucket     string
+	key        string
+	clientName string
+
+	t         time.Time
+	sortValue int
+
+	s3Svc S3Service
+	file  io.ReadCloser
+}
+
+func (sa *storeArchive) Read(p []byte) (int, error) {
+	// get file on first read
+	if sa.file == nil {
 		out, err := sa.s3Svc.GetObject(&s3.GetObjectInput{
-			Bucket: aws.String(sa.Bucket),
-			Key:    aws.String(sa.Key),
+			Bucket: aws.String(sa.bucket),
+			Key:    aws.String(sa.key),
 		})
 
 		if err != nil {
-			return nil, err
+			return 0, err
 		}
 
-		sa.rdr = NewArchiveReader(out.Body)
+		sa.file = out.Body
 	}
 
-	rec, err = sa.rdr.ReadRecord()
-	return
+	return sa.file.Read(p)
 }
 
-func (sa *StoreArchive) parseKeyName(keyName string) (err error) {
+func (sa *storeArchive) parseKeyName(keyName string) error {
 	re := regexp.MustCompile(`(?P<day>\d{8})\/(?P<stream>.+)\-(?P<ts>\d+)\.tri$`)
 	res := re.FindAllStringSubmatch(keyName, -1)
 
@@ -50,9 +67,13 @@ func (sa *StoreArchive) parseKeyName(keyName string) (err error) {
 		return fmt.Errorf("Invalid key name")
 	}
 
-	sa.T, err = time.Parse("20060102", res[0][1])
+	var err error
+	sa.t, err = time.Parse("20060102", res[0][1])
+	if err != nil {
+		return err
+	}
 
-	n, err := fmt.Sscanf(res[0][3], "%d", &sa.SortValue)
+	n, err := fmt.Sscanf(res[0][3], "%d", &sa.sortValue)
 	if n != 1 {
 		return fmt.Errorf("Failed to parse sort value")
 	}
@@ -61,21 +82,23 @@ func (sa *StoreArchive) parseKeyName(keyName string) (err error) {
 	if len(nameParts) != 2 {
 		return fmt.Errorf("Failure parsing stream name: %v", res[0][2])
 	}
-	sa.StreamName = nameParts[0]
-	sa.ClientName = nameParts[1]
+	sa.streamName = nameParts[0]
+	sa.clientName = nameParts[1]
 
-	return
+	return nil
 }
 
-func NewStoreArchive(bucketName, keyName string, svc S3Service) (sa StoreArchive, err error) {
-	sa.Bucket = bucketName
-	sa.Key = keyName
-	sa.s3Svc = svc
-
-	err = sa.parseKeyName(keyName)
-	if err != nil {
-		return sa, err
+func newStoreArchive(bucketName, keyName string, svc S3Service) (*storeArchive, error) {
+	archive := &storeArchive{
+		bucket: bucketName,
+		key:    keyName,
+		s3Svc:  svc,
 	}
 
-	return sa, nil
+	err := archive.parseKeyName(keyName)
+	if err != nil {
+		return archive, err
+	}
+
+	return archive, nil
 }

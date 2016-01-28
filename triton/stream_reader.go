@@ -84,20 +84,31 @@ func (s *Stream) Read(p []Record) (int, error) {
 	return n, nil
 }
 
+// Seek moves the reader to a given sequence number in a shard
 func (s *Stream) Seek(shardID, sequenceNumber string) {
 	s.lock.Lock()
 	s.seqNums[shardID] = sequenceNumber
 	s.lock.Unlock()
 }
 
+// Shards returns the list of shards the stream configured to use
 func (s *Stream) Shards() []string {
 	return s.shardIDs
 }
 
+// SequenceNumber returns current sequence number for a given shard.
+//
+// If there is no sequence number, the newest sequence number is used.
 func (s *Stream) SequenceNumber(shard string) string {
-	s.lock.RLock()
-	sn := s.seqNums[shard]
-	s.lock.RUnlock()
+	s.lock.Lock()
+	sn, ok := s.seqNums[shard]
+	if !ok {
+		latestSN := "" // TODO: Get the latest sequence number
+		s.seqNums[shard] = latestSN
+		sn = latestSN
+	}
+
+	s.lock.Lock()
 	return sn
 }
 

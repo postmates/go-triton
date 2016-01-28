@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/tinylib/msgp/msgp"
 )
@@ -197,4 +198,55 @@ func (s *testKinesisService) PutRecords(input *kinesis.PutRecordsInput) (*kinesi
 	}
 
 	return output, nil
+}
+
+type nullKinesisService struct{}
+
+func (s *nullKinesisService) GetShardIterator(*kinesis.GetShardIteratorInput) (*kinesis.GetShardIteratorOutput, error) {
+	gso := &kinesis.GetShardIteratorOutput{ShardIterator: aws.String("123")}
+	return gso, nil
+}
+
+func (s *nullKinesisService) GetRecords(*kinesis.GetRecordsInput) (*kinesis.GetRecordsOutput, error) {
+	records := []*kinesis.Record{}
+	gso := &kinesis.GetRecordsOutput{
+		NextShardIterator:  aws.String("124"),
+		MillisBehindLatest: aws.Int64(0),
+		Records:            records,
+	}
+	return gso, nil
+}
+
+func (s *nullKinesisService) DescribeStream(input *kinesis.DescribeStreamInput) (*kinesis.DescribeStreamOutput, error) {
+	return nil, fmt.Errorf("Not Implemented")
+}
+
+func (s *nullKinesisService) PutRecords(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
+	results := []*kinesis.PutRecordsResultEntry{}
+	gso := &kinesis.PutRecordsOutput{
+		Records:           results,
+		FailedRecordCount: aws.Int64(0),
+	}
+	return gso, nil
+}
+
+type failingKinesisService struct{}
+
+func (s *failingKinesisService) DescribeStream(input *kinesis.DescribeStreamInput) (*kinesis.DescribeStreamOutput, error) {
+	return nil, fmt.Errorf("Not Implemented")
+}
+
+func (s *failingKinesisService) GetRecords(*kinesis.GetRecordsInput) (*kinesis.GetRecordsOutput, error) {
+	err := awserr.New("ProvisionedThroughputExceededException", "slow down dummy", fmt.Errorf("error"))
+	return nil, err
+}
+
+func (s *failingKinesisService) GetShardIterator(*kinesis.GetShardIteratorInput) (*kinesis.GetShardIteratorOutput, error) {
+	gso := &kinesis.GetShardIteratorOutput{ShardIterator: aws.String("123")}
+	return gso, nil
+}
+
+func (s *failingKinesisService) PutRecords(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
+	err := awserr.New("ProvisionedThroughputExceededException", "slow down dummy", fmt.Errorf("error"))
+	return nil, err
 }
