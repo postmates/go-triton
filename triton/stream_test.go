@@ -136,7 +136,7 @@ func TestFetchMoreRecordsWait(t *testing.T) {
 
 	wait := time.Since(n)
 	if wait < 50*time.Millisecond || wait > 100*time.Millisecond {
-		t.Errorf("Did not wait correctly: ", wait)
+		t.Errorf("Did not wait correctly: %s ", wait)
 	}
 }
 
