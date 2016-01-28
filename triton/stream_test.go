@@ -99,7 +99,6 @@ func TestStreamWait(t *testing.T) {
 	if time.Since(n).Seconds() < 0.050 {
 		t.Errorf("Should have waited")
 	}
-
 }
 
 func TestFetchMoreRecords(t *testing.T) {
@@ -122,6 +121,22 @@ func TestFetchMoreRecords(t *testing.T) {
 
 	if len(s.records) != 1 {
 		t.Errorf("Should have a record")
+	}
+}
+
+func TestFetchMoreRecordsWait(t *testing.T) {
+	svc := NullKinesisService{}
+	s := NewShardStreamReader(&svc, "test-stream", "shard-0000")
+	MinPollInterval = 50 * time.Millisecond
+
+	s.fetchMoreRecords()
+
+	n := time.Now()
+	s.fetchMoreRecords() // this one should block
+
+	wait := time.Since(n)
+	if wait < 50*time.Millisecond || wait > 100*time.Millisecond {
+		t.Errorf("Did not wait correctly: %s ", wait)
 	}
 }
 
