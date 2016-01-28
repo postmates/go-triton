@@ -128,7 +128,7 @@ for {
 ```
 
 There are two global variables that help control the interaction with Kinesis:
-* *MinPollInterval*: minimum amount of time between Kinesis GetRecords calls
+* *MinPollInterval*: minimum amount of time between Kinesis GetRecords api calls
 * *RequestLimit*: Maximum amount of records to return for each GetRecords call
 
 ### Streaming from S3 ###
