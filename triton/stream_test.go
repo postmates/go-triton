@@ -133,16 +133,10 @@ func TestFetchMoreRecordsWait(t *testing.T) {
 
 	n := time.Now()
 	s.fetchMoreRecords() // this one should block
-	if time.Since(n) > 100*time.Millisecond {
-		t.Errorf("Waited too long: %s", time.Since(n))
-	}
 
-	s.fetchMoreRecords() // trigger first
-
-	n = time.Now()
-	s.fetchMoreRecords() // this one should block
-	if time.Since(n) < 50*time.Millisecond {
-		t.Errorf("Should have waited: %s", time.Since(n))
+	wait := time.Since(n)
+	if wait < 50*time.Millisecond || wait > 100*time.Millisecond {
+		t.Errorf("Did not wait correctly: ", wait)
 	}
 }
 
