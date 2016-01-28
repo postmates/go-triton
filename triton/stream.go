@@ -36,6 +36,7 @@ type ShardStreamReader struct {
 // Recommended minimum polling interval to keep from overloading a Kinesis
 // shard.
 var MinPollInterval = 1.0 * time.Second
+var RequestLimit int64 = 1000
 
 const maxRetries = 4
 
@@ -120,7 +121,7 @@ func (s *ShardStreamReader) fetchMoreRecords() (err error) {
 	}
 
 	gri := &kinesis.GetRecordsInput{
-		Limit:         aws.Int64(1000),
+		Limit:         aws.Int64(RequestLimit),
 		ShardIterator: s.NextIteratorValue,
 	}
 
