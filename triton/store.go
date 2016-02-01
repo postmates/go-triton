@@ -195,15 +195,19 @@ func (s *Store) Store(stream *Stream, chunkSize int) error {
 
 const BUFFER_SIZE int = 1024 * 1024
 
-func NewStore(name string, up *s3Uploader) (s *Store) {
-	b := make([]byte, 0, BUFFER_SIZE)
-	buf := bytes.NewBuffer(b)
-
-	s = &Store{
-		name:     name,
-		buf:      buf,
-		uploader: up,
-	}
-
-	return
-}
+// func NewStore(name, bucket string) *Store {
+// 	return NewStoreService(nil, name, bucket)
+// }
+//
+// func NewStoreService(up *s3Uploader, name, bucket string) (s *Store) {
+// 	b := make([]byte, 0, BUFFER_SIZE)
+// 	buf := bytes.NewBuffer(b)
+//
+// 	s = &Store{
+// 		name:     name,
+// 		buf:      buf,
+// 		uploader: up,
+// 	}
+//
+// 	return
+// }

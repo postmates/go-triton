@@ -1,11 +1,11 @@
 package triton
 
 import (
-	"bytes"
-	"io/ioutil"
+	"io"
 
 	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
 // These 'Services' are just shims to allow for easier testing.  They also give
@@ -19,20 +19,22 @@ type KinesisService interface {
 }
 
 type S3Service interface {
-	GetObject(input *s3.GetObjectInput) (*s3.GetObjectOutput, error)
 	ListObjects(*s3.ListObjectsInput) (*s3.ListObjectsOutput, error)
+	Download(w io.WriterAt, input *s3.GetObjectInput, options ...func(*s3manager.Downloader)) (n int64, err error)
+	Upload(input *s3manager.UploadInput, options ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error)
 }
 
 type nullS3Service struct{}
 
-func (s *nullS3Service) GetObject(*s3.GetObjectInput) (*s3.GetObjectOutput, error) {
-	goo := &s3.GetObjectOutput{}
-	buf := bytes.NewBuffer(make([]byte, 0))
-	goo.Body = ioutil.NopCloser(buf)
-	return goo, nil
+func (s *nullS3Service) Download(w io.WriterAt, input *s3.GetObjectInput, options ...func(*s3manager.Downloader)) (int64, error) {
+	return 0, nil
 }
 
 func (s *nullS3Service) ListObjects(*s3.ListObjectsInput) (*s3.ListObjectsOutput, error) {
 	loo := &s3.ListObjectsOutput{}
 	return loo, nil
+}
+
+func (s *nullS3Service) Upload(input *s3manager.UploadInput, options ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error) {
+	return &s3manager.UploadOutput{}, nil
 }

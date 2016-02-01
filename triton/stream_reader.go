@@ -11,9 +11,9 @@ import (
 	"github.com/cenkalti/backoff"
 )
 
-const maxRetries = 4
-const initialRetryInterval = 50 * time.Millisecond
-const maxRetryDuration = 5 * time.Second
+const maxRetries = 5
+const initialRetryInterval = 500 * time.Millisecond
+const maxRetryDuration = 10 * time.Second
 
 // NewStream returns a stream configured for all shards using env variables
 // to determine the Kinesis Service.
