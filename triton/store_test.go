@@ -13,7 +13,7 @@ import (
 
 type nullStreamReader struct{}
 
-func (nsr *nullStreamReader) ReadRecord() (map[string]interface{}, error) {
+func (nsr *nullStreamReader) ReadRecord() (Record, error) {
 	return nil, io.EOF
 }
 

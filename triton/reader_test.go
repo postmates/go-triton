@@ -23,7 +23,7 @@ func TestSerialReaderEmtpy(t *testing.T) {
 
 type instantEOFReader struct{}
 
-func (sr *instantEOFReader) ReadRecord() (rec map[string]interface{}, err error) {
+func (sr *instantEOFReader) ReadRecord() (rec Record, err error) {
 	return nil, io.EOF
 }
 

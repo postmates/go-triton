@@ -31,6 +31,15 @@ func (s *NullKinesisService) DescribeStream(input *kinesis.DescribeStreamInput) 
 	return nil, fmt.Errorf("Not Implemented")
 }
 
+func (s *NullKinesisService) PutRecords(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
+	results := []*kinesis.PutRecordsResultEntry{}
+	gso := &kinesis.PutRecordsOutput{
+		Records:           results,
+		FailedRecordCount: aws.Int64(0),
+	}
+	return gso, nil
+}
+
 type FailingKinesisService struct{}
 
 func (s *FailingKinesisService) DescribeStream(input *kinesis.DescribeStreamInput) (*kinesis.DescribeStreamOutput, error) {
@@ -45,6 +54,11 @@ func (s *FailingKinesisService) GetRecords(*kinesis.GetRecordsInput) (*kinesis.G
 func (s *FailingKinesisService) GetShardIterator(*kinesis.GetShardIteratorInput) (*kinesis.GetShardIteratorOutput, error) {
 	gso := &kinesis.GetShardIteratorOutput{ShardIterator: aws.String("123")}
 	return gso, nil
+}
+
+func (s *FailingKinesisService) PutRecords(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
+	err := awserr.New("ProvisionedThroughputExceededException", "slow down dummy", fmt.Errorf("error"))
+	return nil, err
 }
 
 func TestNewShardStreamReader(t *testing.T) {
@@ -106,7 +120,7 @@ func TestFetchMoreRecords(t *testing.T) {
 	st := newTestKinesisStream("test-stream")
 	s1 := newTestKinesisShard()
 
-	r1 := make(map[string]interface{})
+	r1 := make(Record)
 	s1.AddRecord(SequenceNumber("a"), r1)
 	st.AddShard("shard-0000", s1)
 	svc.AddStream(st)
@@ -165,7 +179,7 @@ func TestRead(t *testing.T) {
 	st := newTestKinesisStream("test-stream")
 	s1 := newTestKinesisShard()
 
-	r1 := make(map[string]interface{})
+	r1 := make(Record)
 	s1.AddRecord(SequenceNumber("a"), r1)
 	st.AddShard("shard-0000", s1)
 	svc.AddStream(st)

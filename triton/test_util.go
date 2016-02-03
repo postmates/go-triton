@@ -1,11 +1,13 @@
-// Mock Kinesis Service
 package triton
+
+// Mock Kinesis Service
 
 import (
 	"bytes"
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/kinesis"
@@ -21,7 +23,7 @@ type testKinesisShard struct {
 	records []testKinesisRecords
 }
 
-func (s *testKinesisShard) AddRecord(sn SequenceNumber, rec map[string]interface{}) {
+func (s *testKinesisShard) AddRecord(sn SequenceNumber, rec Record) {
 	b := bytes.NewBuffer(make([]byte, 0, 1024))
 	w := msgp.NewWriter(b)
 	err := w.WriteMapStrIntf(rec)
@@ -29,8 +31,34 @@ func (s *testKinesisShard) AddRecord(sn SequenceNumber, rec map[string]interface
 		panic(err)
 	}
 	w.Flush()
-	rs := testKinesisRecords{sn, [][]byte{b.Bytes()}}
+	s.AddData(sn, b.Bytes())
+}
+
+func (s *testKinesisShard) AddData(sn SequenceNumber, data []byte) {
+	rs := testKinesisRecords{sn, [][]byte{data}}
 	s.records = append(s.records, rs)
+}
+
+func (s *testKinesisShard) PopData() (SequenceNumber, []byte) {
+	r := s.records[0]
+	s.records = s.records[1:]
+	return r.sn, r.recordData[0]
+}
+
+func (s *testKinesisShard) PopRecord() (SequenceNumber, Record) {
+	sn, data := s.PopData()
+
+	b := bytes.NewBuffer(data)
+	r := make(Record)
+
+	w := msgp.NewReader(b)
+	w.ReadMapStrIntf(r)
+
+	return sn, r
+}
+
+func (s *testKinesisShard) NextSequenceNumber() SequenceNumber {
+	return SequenceNumber(time.Now().String())
 }
 
 func newTestKinesisShard() *testKinesisShard {
@@ -117,7 +145,6 @@ func (s *testKinesisService) GetRecords(gri *kinesis.GetRecordsInput) (*kinesis.
 }
 
 func (s *testKinesisService) DescribeStream(input *kinesis.DescribeStreamInput) (*kinesis.DescribeStreamOutput, error) {
-	shards := make([]*kinesis.Shard, 0)
 
 	stream, ok := s.streams[*input.StreamName]
 	if !ok {
@@ -125,7 +152,8 @@ func (s *testKinesisService) DescribeStream(input *kinesis.DescribeStreamInput) 
 		return nil, fmt.Errorf("Failed to find stream")
 	}
 
-	for sid, _ := range stream.shards {
+	var shards []*kinesis.Shard
+	for sid := range stream.shards {
 		shards = append(shards, &kinesis.Shard{ShardId: aws.String(string(sid))})
 	}
 
@@ -139,4 +167,34 @@ func (s *testKinesisService) DescribeStream(input *kinesis.DescribeStreamInput) 
 	}
 
 	return dso, nil
+}
+
+func (s *testKinesisService) PutRecords(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
+	stream, ok := s.streams[*input.StreamName]
+	if !ok {
+		return nil, fmt.Errorf("Failed to find stream")
+	}
+
+	records := make([]*kinesis.PutRecordsResultEntry, len(input.Records))
+	for i, r := range input.Records {
+		shard, ok := stream.shards[ShardID(*r.PartitionKey)]
+		if !ok {
+			return nil, fmt.Errorf("Failed to find shard")
+		}
+
+		sn := shard.NextSequenceNumber()
+		shard.AddData(sn, r.Data)
+
+		records[i] = &kinesis.PutRecordsResultEntry{
+			SequenceNumber: aws.String(string(sn)),
+			ShardId:        r.PartitionKey,
+		}
+	}
+
+	output := &kinesis.PutRecordsOutput{
+		Records:           records,
+		FailedRecordCount: aws.Int64(0),
+	}
+
+	return output, nil
 }

@@ -204,4 +204,4 @@ Standard go build commands of course also work.
 
   * Metrics/Reporting hooks for easier status checks
   * Better handle Kinesis shard splitting and combining
-  * Better patterns for dealing with arbitrary `map[string]interface{}` data
+  * Better patterns for dealing with arbitrary `Record` data

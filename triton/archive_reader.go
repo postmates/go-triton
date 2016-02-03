@@ -13,8 +13,8 @@ type ArchiveReader struct {
 	mr *msgp.Reader
 }
 
-func (r *ArchiveReader) ReadRecord() (rec map[string]interface{}, err error) {
-	rec = make(map[string]interface{})
+func (r *ArchiveReader) ReadRecord() (rec Record, err error) {
+	rec = make(Record)
 
 	err = r.mr.ReadMapStrIntf(rec)
 	return
