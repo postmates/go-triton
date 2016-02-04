@@ -21,8 +21,8 @@ import (
 //  - date of start of upload window
 //  - unix timestamp of start of upload window
 // Stored as msgpack/snappy
-// Write in batches: Write(p []Record) -- append only (each write is new file)
-// Read in day segments: Reader(start time.Time, end time.Time) Reader -- start <= date <= end
+// Write in batches: Write(r []Record) -- append only (each write is new file)
+// Read in day segments: Reader(start string, end string) Reader -- start <= date <= end
 
 func NewStore(name, bucket string) *Store2 {
 	return NewStoreService(nil, name, bucket)
@@ -66,8 +66,11 @@ func (s *Store2) Write(data []Record) (int, error) {
 	return len(data), nil
 }
 
-func (s *Store2) Reader(start, end time.Time) (Reader, error) {
-	keys, err := s.keysForRange(start, end)
+// start and end are in form time.RFC3339
+func (s *Store2) Reader(start, end string) (Reader, error) {
+	startTime := time.Parse(time.RFC3339, start)
+	endTime := time.Parse(time.RFC3339, end)
+	keys, err := s.keysForRange(startTime, endTime)
 	if err != nil {
 		return nil, err
 	}
@@ -172,11 +175,11 @@ type storeReader2 struct {
 	reader *msgp.Reader
 }
 
-func (sr *storeReader2) Read(p []Record) (int, error) {
-	for i := 0; i < len(p); i++ {
-		if err := sr.reader.ReadMapStrIntf(p[i]); err != nil {
-			return i, err
+func (sr *storeReader2) Read(r []Record) (int, string, error) {
+	for i := 0; i < len(r); i++ {
+		if err := sr.reader.ReadMapStrIntf(r[i]); err != nil {
+			return i, "", err
 		}
 	}
-	return len(p), nil
+	return len(r), nil
 }

@@ -1,6 +1,7 @@
 package triton
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -55,67 +56,60 @@ type Stream struct {
 	name     string
 	shardIDs []string
 
+	service KinesisService // Interactions with Kinesis
+}
+
+func (s *Stream) Reader(off string) (Reader, error) {
+	// decompose off to seqnums and shard ids
+	comps := strings.Split(off, "__")
+
+	if len(comps)%2 != 0 {
+		return nil, fmt.Errorf("Invalid offset")
+	}
+
+	seqNums := map[string]string{}
+	for i := 0; i < len(comps); i += 2 {
+		seqNums[comps[i]] = comps[i+1]
+	}
+
+	sr := &streamReader{s, seqNums: seqNums}
+	return sr, nil
+}
+
+type streamReader struct {
+	*Stream
+
 	seqNums  map[string]string // shardID -> seqNums
 	shardIdx int               // allow for round robin reads
-	lock     *sync.RWMutex     // only serial read allowed
-
-	service KinesisService // Interactions with Kinesis
 }
 
 // Read records from a stream.
 //
 // Read will iterate through shards in a round robin fashion and return at most
-// len(p) records from a single round.
-func (s *Stream) Read(p []Record) (int, error) {
-	s.lock.Lock()
-
+// len(r) records from a single round.
+func (sr *streamReader) Read(r []Record) (int, string, error) {
 	n := 0
-	for reads := 0; reads < len(s.shardIDs) && n <= len(p); reads++ {
-		nextShardIdx := s.shardIdx % len(s.shardIDs)
-		nShard, err := s.readShard(s.shardIDs[nextShardIdx], p[n:len(p)])
-		n += nShard
-
+	for reads := 0; reads < len(sr.shardIDs) && n <= len(r); reads++ {
+		nextShardIdx := s.shardIdx % len(sr.shardIDs)
+		shardID := sr.shardIDs[nextShardIdx]
+		nShard, sn, err := sr.readShard(shardID, sr.seqNums[shardID], r[n:len(r)])
 		if err != nil {
 			return n, err
 		}
+
+		n += nShard
+		sr.seqNums[shardID] = sn // Update sequence number
+		sr.shardIdx++
 	}
 
-	s.lock.Unlock()
-	return n, nil
+	// TODO: create offset from seqNums
+	return n, "", nil
 }
 
-// Seek moves the reader to a given sequence number in a shard
-func (s *Stream) Seek(shardID, sequenceNumber string) {
-	s.lock.Lock()
-	s.seqNums[shardID] = sequenceNumber
-	s.lock.Unlock()
-}
-
-// Shards returns the list of shards the stream configured to use
-func (s *Stream) Shards() []string {
-	return s.shardIDs
-}
-
-// SequenceNumber returns current sequence number for a given shard.
-//
-// If there is no sequence number, the newest sequence number is used.
-func (s *Stream) SequenceNumber(shard string) string {
-	s.lock.Lock()
-	sn, ok := s.seqNums[shard]
-	if !ok {
-		latestSN := "" // TODO: Get the latest sequence number
-		s.seqNums[shard] = latestSN
-		sn = latestSN
-	}
-
-	s.lock.Lock()
-	return sn
-}
-
-func (s *Stream) readShard(shard string, p []Record) (int, error) {
+func (sr *streamReader) readShard(shard, sn string, r []Record) (int, string, error) {
 	gri := &kinesis.GetRecordsInput{
-		Limit:         aws.Int64(int64(len(p))), // read at most buffer
-		ShardIterator: aws.String(s.SequenceNumber(shard)),
+		Limit:         aws.Int64(int64(len(r))), // read at most buffer
+		ShardIterator: aws.String(sn),
 	}
 
 	retries := 0
@@ -142,11 +136,10 @@ REQUEST:
 
 	// Convert records from []byte -> Record
 	for idx, raw := range gro.Records {
-		if p[idx], err = UnmarshalRecord(raw.Data); err != nil {
+		if r[idx], err = UnmarshalRecord(raw.Data); err != nil {
 			return idx, err
 		}
 	}
 
-	s.seqNums[shard] = *gro.NextShardIterator
-	return len(gro.Records), nil
+	return len(gro.Records), *gro.NextShardIterator, nil
 }
