@@ -33,6 +33,26 @@ func (s *testKinesisShard) AddRecord(sn SequenceNumber, rec map[string]interface
 	s.records = append(s.records, rs)
 }
 
+func (s *testKinesisShard) AddOverlengthRecord(sn SequenceNumber, rec map[string]interface{}) {
+	b := bytes.NewBuffer(make([]byte, 0, 1024))
+	w := msgp.NewWriter(b)
+	err := w.WriteMapStrIntf(rec)
+	if err != nil {
+		panic(err)
+	}
+	w.Flush()
+	b.Write([]byte("Hello Failure"))
+	rs := testKinesisRecords{sn, [][]byte{b.Bytes()}}
+	s.records = append(s.records, rs)
+}
+
+func (s *testKinesisShard) AddBadEncodingRecord(sn SequenceNumber) {
+	b := bytes.NewBuffer(make([]byte, 0, 1024))
+	b.Write([]byte("Hello Failure"))
+	rs := testKinesisRecords{sn, [][]byte{b.Bytes()}}
+	s.records = append(s.records, rs)
+}
+
 func newTestKinesisShard() *testKinesisShard {
 	return &testKinesisShard{make([]testKinesisRecords, 0)}
 }
@@ -139,4 +159,14 @@ func (s *testKinesisService) DescribeStream(input *kinesis.DescribeStreamInput) 
 	}
 
 	return dso, nil
+}
+
+type noopCheckpointer struct{}
+
+func (c noopCheckpointer) Checkpoint(shardID ShardID, sequenceNumber SequenceNumber) (err error) {
+	return
+}
+
+func (c noopCheckpointer) LastSequenceNumber(shardID ShardID) (seq SequenceNumber, err error) {
+	return
 }

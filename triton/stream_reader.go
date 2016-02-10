@@ -6,6 +6,7 @@ import (
 	"log"
 	"sync"
 
+	"github.com/getsentry/raven-go"
 	"github.com/tinylib/msgp/msgp"
 )
 
@@ -128,7 +129,12 @@ func processStreamToChan(r *ShardStreamReader, recChan chan map[string]interface
 
 		kRec, err := r.Get()
 		if err != nil {
-			log.Println("Error reading record", err)
+			detailed_error := fmt.Sprintf("Error reading record: %v", err)
+			log.Println(detailed_error)
+			raven.CaptureError(err,
+				map[string]string{
+					"stream":        r.StreamName,
+					"error_message": detailed_error})
 			return
 		}
 
@@ -141,14 +147,25 @@ func processStreamToChan(r *ShardStreamReader, recChan chan map[string]interface
 
 		rec, eb, err := msgp.ReadMapStrIntfBytes(kRec.Data, nil)
 		if err != nil {
-			// This will end the stream. If this ever happens, we might need
-			// some way to repair the stream.
-			log.Println("Failed to decode record from stream", err)
-			return
+			// Log bad data and move on
+			detailed_error := fmt.Sprintf("Failed to decode record from stream: %v", err)
+			log.Println(detailed_error)
+			raven.CaptureError(err,
+				map[string]string{
+					"stream":        r.StreamName,
+					"data":          string(kRec.Data),
+					"error_message": detailed_error})
+			continue
 		}
 		if len(eb) > 0 {
-			log.Println("Extra bytes in stream record", len(eb))
-			return
+			// Log bad data and move on
+			detailed_error := fmt.Errorf("Extra bytes in stream record: %d", len(eb))
+			log.Println(detailed_error)
+			raven.CaptureError(detailed_error,
+				map[string]string{
+					"stream": r.StreamName,
+					"data":   string(kRec.Data)})
+			continue
 		}
 
 		select {

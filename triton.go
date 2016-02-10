@@ -18,12 +18,18 @@ import (
 	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/codegangsta/cli"
+	"github.com/getsentry/raven-go"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/postmates/go-triton/triton"
 )
 
 var LOG_INTERVAL = 10 * time.Second
+
+func init() {
+	raven.SetDSN(os.Getenv("SENTRY_DSN"))
+	raven.SetTagsContext(map[string]string{"service_name": os.Getenv("SERVICE_NAME")})
+}
 
 func openStreamConfig(streamName string) *triton.StreamConfig {
 	fname := os.Getenv("TRITON_CONFIG")
@@ -371,5 +377,7 @@ func main() {
 		},
 	}
 
-	app.Run(os.Args)
+	raven.CapturePanic(func() {
+		app.Run(os.Args)
+	}, nil)
 }

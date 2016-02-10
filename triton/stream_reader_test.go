@@ -80,3 +80,66 @@ func TestNewStreamReader(t *testing.T) {
 
 	sr.Stop()
 }
+
+func TestProcessStreamToChanErrors(t *testing.T) {
+	// This tests whether the stream can recover from and ignore bad data
+	svc := newTestKinesisService()
+	st := newTestKinesisStream("test-stream")
+	s1 := newTestKinesisShard()
+
+	r1 := make(map[string]interface{})
+	r1["value"] = "a"
+	s1.AddOverlengthRecord(SequenceNumber("a"), r1)
+	r2 := make(map[string]interface{})
+	r2["value"] = "b"
+	s1.AddRecord(SequenceNumber("b"), r2)
+	st.AddShard(ShardID("0"), s1)
+
+	s2 := newTestKinesisShard()
+	s2.AddBadEncodingRecord(SequenceNumber("c"))
+	r3 := make(map[string]interface{})
+	r3["value"] = "d"
+	s2.AddRecord(SequenceNumber("d"), r3)
+	st.AddShard(ShardID("1"), s2)
+
+	svc.AddStream(st)
+
+	sr, err := NewStreamReader(svc, "test-stream", noopCheckpointer{})
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	foundB := false
+	foundD := false
+
+	rec1, err := sr.ReadRecord()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	// Records could be in any order
+	if rec1["value"].(string) == "d" {
+		foundD = true
+	} else if rec1["value"].(string) == "b" {
+		foundB = true
+	}
+
+	rec2, err := sr.ReadRecord()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if rec2["value"].(string) == "d" {
+		foundD = true
+	} else if rec2["value"].(string) == "b" {
+		foundB = true
+	}
+
+	if !(foundD && foundB) {
+		t.Error("Failed to find records a and b")
+	}
+
+	sr.Stop()
+}
