@@ -56,6 +56,24 @@ func (msr *multiShardStreamReader) Stop() {
 const maxShards int = 100
 
 func NewStreamReader(svc KinesisService, streamName string, c Checkpointer) (sr StreamReader, err error) {
+	sr, err = newStreamReader(svc, streamName, c, false)
+	return
+}
+
+func NewStreamReaderFromLatest(svc KinesisService, streamName string, c Checkpointer) (sr StreamReader, err error) {
+	sr, err = newStreamReader(svc, streamName, c, false)
+	return
+}
+
+func NewStreamReaderFromTrimHorizon(svc KinesisService, streamName string, c Checkpointer) (sr StreamReader, err error) {
+	sr, err = newStreamReader(svc, streamName, c, true)
+	return
+}
+
+func newStreamReader(svc KinesisService, streamName string, c Checkpointer, fromTrimHorizon bool) (sr StreamReader, err error) {
+	// This function will always first try to get a valid checkpoint sequence number
+	// otherwise, it will get a new iterator either from the trim horizon if fromTrimHorizon is true,
+	// or it will get it from latest if fromTrimHorizon is false
 	msr := multiShardStreamReader{
 		c,
 		make([]*ShardStreamReader, 0),
@@ -87,11 +105,19 @@ func NewStreamReader(svc KinesisService, streamName string, c Checkpointer) (sr 
 			return nil, err
 		}
 		var shardStream *ShardStreamReader
-		if sn == "" {
-			shardStream = NewShardStreamReader(svc, streamName, sid)
-		} else {
+		// if sn == "" {
+		// 	shardStream = NewShardStreamReader(svc, streamName, sid)
+		// } else {
+		// 	shardStream = NewShardStreamReaderFromSequence(svc, streamName, sid, sn)
+		// }
+		if sn != "" {
 			shardStream = NewShardStreamReaderFromSequence(svc, streamName, sid, sn)
+		} else if fromTrimHorizon {
+			shardStream = NewShardStreamReaderTrimHorizon(svc, streamName, sid)
+		} else {
+			shardStream = NewShardStreamReader(svc, streamName, sid)
 		}
+
 
 		msr.readers = append(msr.readers, shardStream)
 
