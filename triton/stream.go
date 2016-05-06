@@ -207,6 +207,20 @@ func NewShardStreamReader(svc KinesisService, streamName string, sid ShardID) (s
 	return s
 }
 
+// Create a new stream starting at the oldest position
+//
+// This uses the Kinesis TRIM_HORIZON iterator type and assumes the caller only wants all availible data.
+func NewShardStreamReaderTrimHorizon(svc KinesisService, streamName string, sid ShardID) (s *ShardStreamReader) {
+	s = &ShardStreamReader{
+		StreamName:        streamName,
+		ShardID:           sid,
+		ShardIteratorType: "TRIM_HORIZON",
+		service:           svc,
+	}
+
+	return s
+}
+
 // Utility function to pick a shard id given an integer shard number.
 // Use this if you want the 2nd shard, but don't know what the id would be.
 func PickShardID(svc KinesisService, streamName string, shardNum int) (sid ShardID, err error) {
