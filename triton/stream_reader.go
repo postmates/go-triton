@@ -60,12 +60,12 @@ func NewStreamReader(svc KinesisService, streamName string, c Checkpointer) (sr 
 	return
 }
 
-func NewStreamReaderFromLatest(svc KinesisService, streamName string, c Checkpointer) (sr StreamReader, err error) {
+func NewStreamReaderDefaultLatest(svc KinesisService, streamName string, c Checkpointer) (sr StreamReader, err error) {
 	sr, err = newStreamReader(svc, streamName, c, false)
 	return
 }
 
-func NewStreamReaderFromTrimHorizon(svc KinesisService, streamName string, c Checkpointer) (sr StreamReader, err error) {
+func NewStreamReaderDefaultTrimHorizon(svc KinesisService, streamName string, c Checkpointer) (sr StreamReader, err error) {
 	sr, err = newStreamReader(svc, streamName, c, true)
 	return
 }
@@ -117,7 +117,6 @@ func newStreamReader(svc KinesisService, streamName string, c Checkpointer, from
 		} else {
 			shardStream = NewShardStreamReader(svc, streamName, sid)
 		}
-
 
 		msr.readers = append(msr.readers, shardStream)
 
