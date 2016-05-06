@@ -207,9 +207,9 @@ func NewShardStreamReader(svc KinesisService, streamName string, sid ShardID) (s
 	return s
 }
 
-// Create a new stream starting at the latest position
+// Create a new stream starting at the oldest position
 //
-// This uses the Kinesis LATEST iterator type and assumes the caller only wants new data.
+// This uses the Kinesis TRIM_HORIZON iterator type and assumes the caller only wants all availible data.
 func NewShardStreamReaderTrimHorizon(svc KinesisService, streamName string, sid ShardID) (s *ShardStreamReader) {
 	s = &ShardStreamReader{
 		StreamName:        streamName,
