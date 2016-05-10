@@ -212,14 +212,17 @@ func main() {
 			},
 			Action: func(c *cli.Context) error {
 				if c.String("bucket") == "" {
+					cli.ShowSubcommandHelp(c)
 					return cli.NewExitError("bucket name required", 1)
 				}
 
 				if c.String("stream") == "" {
+					cli.ShowSubcommandHelp(c)
 					return cli.NewExitError("stream name required", 1)
 				}
 
 				if strings.Contains(c.String("client-name"), "-") {
+					cli.ShowSubcommandHelp(c)
 					return cli.NewExitError("client name cannot contain a -", 1)
 				}
 
@@ -245,10 +248,12 @@ func main() {
 			},
 			Action: func(c *cli.Context) error {
 				if c.String("client-name") == "" {
+					cli.ShowSubcommandHelp(c)
 					return cli.NewExitError("missing client name", 1)
 				}
 
 				if strings.Contains(c.String("client-name"), "-") {
+					cli.ShowSubcommandHelp(c)
 					return cli.NewExitError("client name cannot contain a -", 1)
 				}
 
@@ -266,6 +271,7 @@ func main() {
 				}},
 			Action: func(c *cli.Context) error {
 				if c.String("stream") == "" {
+					cli.ShowSubcommandHelp(c)
 					return cli.NewExitError("stream name required", 1)
 				}
 
@@ -302,14 +308,17 @@ func main() {
 				}},
 			Action: func(c *cli.Context) error {
 				if c.String("stream") == "" {
+					cli.ShowSubcommandHelp(c)
 					return cli.NewExitError("stream name required", 1)
 				}
 
 				if c.String("bucket") == "" {
+					cli.ShowSubcommandHelp(c)
 					return cli.NewExitError("bucket name required", 1)
 				}
 
 				if c.String("start-date") == "" {
+					cli.ShowSubcommandHelp(c)
 					return cli.NewExitError("start-date required", 1)
 				}
 
@@ -319,6 +328,7 @@ func main() {
 
 				start, err := time.Parse("20060102", c.String("start-date"))
 				if err != nil {
+					cli.ShowSubcommandHelp(c)
 					return cli.NewExitError("invalid start-date", 1)
 				}
 
@@ -326,6 +336,7 @@ func main() {
 				if c.String("end-date") != "" {
 					end, err = time.Parse("20060102", c.String("end-date"))
 					if err != nil {
+						cli.ShowSubcommandHelp(c)
 						return cli.NewExitError("invalid end-date", 1)
 					}
 				}
