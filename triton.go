@@ -210,26 +210,21 @@ func main() {
 					EnvVar: "TRITON_CLIENT",
 				},
 			},
-			Action: func(c *cli.Context) {
+			Action: func(c *cli.Context) error {
 				if c.String("bucket") == "" {
-					fmt.Fprintln(os.Stderr, "bucket name required")
-					cli.ShowSubcommandHelp(c)
-					os.Exit(1)
+					return cli.NewExitError("bucket name required", 1)
 				}
 
 				if c.String("stream") == "" {
-					fmt.Fprintln(os.Stderr, "stream name required")
-					cli.ShowSubcommandHelp(c)
-					os.Exit(1)
+					return cli.NewExitError("stream name required", 1)
 				}
 
 				if strings.Contains(c.String("client-name"), "-") {
-					fmt.Fprintln(os.Stderr, "client name cannot contain a -")
-					cli.ShowSubcommandHelp(c)
-					os.Exit(1)
+					return cli.NewExitError("client name cannot contain a -", 1)
 				}
 
 				store(c.String("client-name"), c.String("stream"), c.String("bucket"), c.String("checkpoint-db"), c.Bool("skip-to-latest"))
+				return nil
 			},
 		},
 		{
@@ -248,20 +243,17 @@ func main() {
 					EnvVar: "TRITON_CLIENT",
 				},
 			},
-			Action: func(c *cli.Context) {
+			Action: func(c *cli.Context) error {
 				if c.String("client-name") == "" {
-					fmt.Fprintln(os.Stderr, "missing client name")
-					cli.ShowSubcommandHelp(c)
-					os.Exit(1)
+					return cli.NewExitError("missing client name", 1)
 				}
 
 				if strings.Contains(c.String("client-name"), "-") {
-					fmt.Fprintln(os.Stderr, "client name cannot contain a -")
-					cli.ShowSubcommandHelp(c)
-					os.Exit(1)
+					return cli.NewExitError("client name cannot contain a -", 1)
 				}
 
 				checkpointStats(c.String("client-name"), c.String("checkpoint-db"))
+				return nil
 			},
 		},
 		{
@@ -272,14 +264,13 @@ func main() {
 					Name:  "stream",
 					Usage: "Named triton stream",
 				}},
-			Action: func(c *cli.Context) {
+			Action: func(c *cli.Context) error {
 				if c.String("stream") == "" {
-					fmt.Fprintln(os.Stderr, "stream name required")
-					cli.ShowSubcommandHelp(c)
-					os.Exit(1)
+					return cli.NewExitError("stream name required", 1)
 				}
 
 				listShards(c.String("stream"))
+				return nil
 			},
 		},
 		{
@@ -309,23 +300,17 @@ func main() {
 					Value:  "",
 					EnvVar: "TRITON_CLIENT",
 				}},
-			Action: func(c *cli.Context) {
+			Action: func(c *cli.Context) error {
 				if c.String("stream") == "" {
-					fmt.Fprintln(os.Stderr, "stream name required")
-					cli.ShowSubcommandHelp(c)
-					os.Exit(1)
+					return cli.NewExitError("stream name required", 1)
 				}
 
 				if c.String("bucket") == "" {
-					fmt.Fprintln(os.Stderr, "bucket name required")
-					cli.ShowSubcommandHelp(c)
-					os.Exit(1)
+					return cli.NewExitError("bucket name required", 1)
 				}
 
 				if c.String("start-date") == "" {
-					fmt.Fprintln(os.Stderr, "start-date required")
-					cli.ShowSubcommandHelp(c)
-					os.Exit(1)
+					return cli.NewExitError("start-date required", 1)
 				}
 
 				// TODO: configure region
@@ -334,18 +319,14 @@ func main() {
 
 				start, err := time.Parse("20060102", c.String("start-date"))
 				if err != nil {
-					fmt.Fprintln(os.Stderr, "invalid start-date")
-					cli.ShowSubcommandHelp(c)
-					os.Exit(1)
+					return cli.NewExitError("invalid start-date", 1)
 				}
 
 				end := start
 				if c.String("end-date") != "" {
 					end, err = time.Parse("20060102", c.String("end-date"))
 					if err != nil {
-						fmt.Fprintln(os.Stderr, "invalid end-date")
-						cli.ShowSubcommandHelp(c)
-						os.Exit(1)
+						return cli.NewExitError("invalid end-date", 1)
 					}
 				}
 
@@ -372,7 +353,7 @@ func main() {
 					}
 					fmt.Println(string(b))
 				}
-
+				return nil
 			},
 		},
 	}
