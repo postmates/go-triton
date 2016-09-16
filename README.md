@@ -39,7 +39,7 @@ named `user_activity` but the underlying AWS configured stream name may change.
 Events in Triton are Serialized using [Message Pack](http://msgpack.org/)
 
 When stored to S3, they are also framed and compressed using
-[Snappy](https://code.google.com/p/snappy/source/browse/trunk/framing_format.txt)
+[Snappy](http://google.github.io/snappy/)
 
 This combination is good tradeoff between flexibility and performance.
 
