@@ -7,23 +7,24 @@ func NewMockClient() *MockClient {
 	return &MockClient{
 		lock:           new(sync.Mutex),
 		PartitionCount: make(map[string]int),
+		StreamData:     make(map[string]([](map[string]interface{}))),
 	}
 }
 
 // MockClient implements a client that stores the messages in memory
 type MockClient struct {
-	StreamMessage  map[string]([]Message)
+	StreamData     map[string]([](map[string]interface{}))
 	PartitionCount map[string]int
 
 	lock *sync.Mutex
 }
 
 // Put implements the client interface
-func (c *MockClient) Put(stream string, msg Message) error {
+func (c *MockClient) Put(stream, partition string, data map[string]interface{}) error {
 	c.lock.Lock()
-	messages, _ := c.StreamMessage[stream]
-	c.StreamMessage[stream] = append(messages, msg)
-	c.PartitionCount[msg.PartitionKey()]++
+	messages, _ := c.StreamData[stream]
+	c.StreamData[stream] = append(messages, data)
+	c.PartitionCount[partition]++
 	c.lock.Unlock()
 	return nil
 }

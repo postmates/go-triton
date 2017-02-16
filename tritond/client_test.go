@@ -1,103 +1,93 @@
 package tritond
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"log"
+	"sync"
 	"testing"
 	"time"
 
-	"github.com/pebbe/zmq4"
-	"github.com/tinylib/msgp/msgp"
+	"github.com/stretchr/testify/assert"
 )
 
-type consumer struct {
-	callback func(stream, partition string, data map[string]interface{})
-	close    chan bool
-}
-
-func (c *consumer) Start() error {
-	s, err := zmq4.NewSocket(zmq4.PULL)
-	if err != nil {
-		return err
-	}
-
-	err = s.Bind("tcp://127.0.0.1:3515")
-	go func() {
-		for {
-			select {
-			case <-c.close:
-				return
-			default:
-				if msg, err := s.RecvMessageBytes(0); err == nil {
-					header := make(map[string]string)
-					if jsonErr := json.Unmarshal(msg[0], &header); jsonErr != nil {
-						log.Print(jsonErr)
-					}
-
-					body := map[string]interface{}{}
-					bodyData := bytes.NewBuffer(msg[1])
-					reader := msgp.NewReader(bodyData)
-					if msgErr := reader.ReadMapStrIntf(body); msgErr != nil {
-						log.Print(msgErr)
-					}
-
-					stream, _ := header["stream_name"]
-					partition, _ := header["partition_key"]
-					c.callback(stream, partition, body)
-
-				} else {
-					log.Print(msg, err)
-				}
-			}
-		}
-	}()
-
-	return nil
-}
-
-func (c *consumer) Stop() error {
-	close(c.close)
-	return nil
-}
-
-func newConsumer(fn func(stream, partition string, data map[string]interface{})) *consumer {
-	return &consumer{
-		callback: fn,
-		close:    make(chan bool),
-	}
-}
-
 func TestPut(t *testing.T) {
-	consumer := newConsumer(func(stream, partition string, data map[string]interface{}) {
-		fmt.Println("Consumer", stream, partition, data)
-	})
-	consumer.Start()
+	n := 10
+	dataChan := make(chan map[string]interface{}, n)
+	gConsumer.callback = func(stream, partition string, data map[string]interface{}) {
+		dataChan <- data
+	}
 	c, _ := NewClient()
 
-	data := ObjectMessage{
+	data := map[string]interface{}{
 		"object_type":   "delivery",
 		"delivery_uuid": "example-delivery-uuid",
 		"ts":            time.Now(),
-		"version":       1,
+		"version":       int64(1),
 		"data": map[string]interface{}{
-			"couriers": []string{"a", "b", "c"},
+			"couriers": []interface{}{"a", "b", "c"},
 		},
 	}
 
-	for i := 0; i < 10; i++ {
-		err := c.Put(context.Background(), "delivery", data)
+	for i := 0; i < n; i++ {
+		err := c.Put(context.Background(), "delivery", "example-delivery-uuid", data)
 		if err != nil {
 			fmt.Println(err)
 		}
 	}
+	c.Close(context.Background())
 
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	c.Close(ctx)
-	cancel()
+	for i := 0; i < n; i++ {
+		recievedData := <-dataChan
+		assert.EqualValues(t, data, recievedData)
+	}
+}
 
-	time.Sleep(3 * time.Second)
-	consumer.Stop()
+func TestPutConcurrent(t *testing.T) {
+	n := 50
+	dataChan := make(chan map[string]interface{}, n)
+	gConsumer.callback = func(stream, partition string, data map[string]interface{}) {
+		dataChan <- data
+	}
+	c, _ := NewClient(WithNumIdleConns(2))
+
+	data := map[string]interface{}{
+		"object_type":   "delivery",
+		"delivery_uuid": "example-delivery-uuid",
+		"ts":            time.Now(),
+		"version":       int64(1),
+		"data": map[string]interface{}{
+			"couriers": []interface{}{"a", "b", "c"},
+		},
+	}
+
+	wg := new(sync.WaitGroup)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := c.Put(context.Background(), "delivery", "example-delivery-uuid", data)
+			assert.NoError(t, err)
+		}()
+	}
+
+	wg.Wait()
+
+	for i := 0; i < n; i++ {
+		recievedData := <-dataChan
+		assert.EqualValues(t, data, recievedData)
+	}
+	c.Close(context.Background())
+}
+
+func TestPutWithBadEndpoint(t *testing.T) {
+	c, _ := NewClient()
+	c.Close(context.Background())
+	err := c.Put(context.Background(), "test", "teset", nil)
+	assert.Equal(t, err, ErrClientClosed)
+}
+
+func TestPutClosed(t *testing.T) {
+	c, _ := NewClient(WithZMQEndpoint("random://random.random"))
+	err := c.Put(context.Background(), "test", "teset", nil)
+	assert.Error(t, err)
 }

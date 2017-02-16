@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -17,34 +16,17 @@ const (
 	// DefaultZMQHWM configures the high water mark for the push socket.
 	// More info: http://api.zeromq.org/4-1:zmq-setsockopt#toc39
 	DefaultZMQHWM = 4000
+
+	// DefaultNumIdleConns configures the number of idle sockets to maintain for zmq.
+	DefaultNumIdleConns = 10
 )
 
+// ErrClientClosed indicates that the client has been closed and is not longer usable.
 var ErrClientClosed = errors.New("Client Closed")
-
-// Message defines the data format for tritond
-type Message interface {
-	Data() map[string]interface{}
-	PartitionKey() string
-}
-
-// ObjectMessage defines a particular map input with required keys
-// `object_type`: type of object (ex. delivery, customer)
-// `{object_type}_uuid`: uuid of object (ex. delivery_uuid: "some-uuid")
-type ObjectMessage map[string]interface{}
-
-// Data returns the entire message
-func (om ObjectMessage) Data() map[string]interface{} { return om }
-
-// PartitionKey returns the `{object_type}_uuid`
-func (om ObjectMessage) PartitionKey() string {
-	objectType := om["object_type"].(string)
-	objectUUID := om[objectType+"_uuid"].(string)
-	return objectUUID
-}
 
 // Client defines the interface of a tritond client
 type Client interface {
-	Put(ctx context.Context, stream string, msg Message) error
+	Put(ctx context.Context, stream, partition string, data map[string]interface{}) error
 	Close(ctx context.Context) error
 }
 
@@ -67,6 +49,14 @@ func WithZMQEndpoint(endpoint string) Option {
 	})
 }
 
+// WithNumIdleConns sets the maximum number of idle zmq sockets
+func WithNumIdleConns(numIdle int) Option {
+	return Option(func(c *zeromqClient) error {
+		c.numIdleConn = numIdle
+		return nil
+	})
+}
+
 // NewClient creates a Client with the given configuration options
 func NewClient(opts ...Option) (Client, error) {
 	zmqCtx, err := zmq4.NewContext()
@@ -75,21 +65,24 @@ func NewClient(opts ...Option) (Client, error) {
 	}
 
 	client := &zeromqClient{
+		numIdleConn:   DefaultNumIdleConns,
 		zmqEndpoint:   "tcp://127.0.0.1:3515",
 		highWaterMark: DefaultZMQHWM,
 		zmqCtx:        zmqCtx,
 		done:          make(chan struct{}),
-		sockets:       make(chan *zmq4.Socket, 10),
 	}
 	for _, opt := range opts {
 		opt(client)
 	}
+	client.sockets = make(chan *zmq4.Socket, client.numIdleConn)
+
 	return client, nil
 }
 
 type zeromqClient struct {
 	zmqEndpoint   string
 	highWaterMark int
+	numIdleConn   int
 
 	zmqCtx  *zmq4.Context
 	done    chan struct{}
@@ -97,35 +90,38 @@ type zeromqClient struct {
 	wg      sync.WaitGroup
 }
 
-func (c *zeromqClient) Put(ctx context.Context, stream string, msg Message) error {
+func (c *zeromqClient) Put(ctx context.Context, stream, partition string,
+	data map[string]interface{}) error {
+
+	// Get socket from pool
 	s, socketErr := c.getSocket(ctx)
 	if socketErr != nil {
 		return socketErr
 	}
 	defer c.putSocket(s)
 
+	// Form header
 	header := struct {
 		StreamName   string `json:"stream_name"`
 		PartitionKey string `json:"partition_key"`
 	}{
 		StreamName:   stream,
-		PartitionKey: msg.PartitionKey(),
+		PartitionKey: partition,
 	}
-
-	// Form header and body
 	headerData, err := json.Marshal(header)
 	if err != nil {
 		return err
 	}
 
-	var buf bytes.Buffer
-	w := msgp.NewWriter(&buf)
-	if err = w.WriteMapStrIntf(msg.Data()); err != nil {
+	// Form body
+	var body bytes.Buffer
+	w := msgp.NewWriter(&body)
+	if err = w.WriteMapStrIntf(data); err != nil {
 		return err
 	}
 	w.Flush()
 
-	_, err = s.SendMessageDontwait(headerData, buf.Bytes())
+	_, err = s.SendMessageDontwait(headerData, body.Bytes())
 	return err
 }
 
@@ -152,6 +148,10 @@ func (c *zeromqClient) Close(ctx context.Context) error {
 	}
 }
 
+//
+// Socket pool
+//
+
 func (c *zeromqClient) getSocket(ctx context.Context) (*zmq4.Socket, error) {
 	select {
 	case <-c.done:
@@ -162,7 +162,6 @@ func (c *zeromqClient) getSocket(ctx context.Context) (*zmq4.Socket, error) {
 		}
 		return s, nil
 	default:
-		fmt.Println("New Socket")
 		// Create a new socket
 		s, err := c.zmqCtx.NewSocket(zmq4.PUSH)
 		if err != nil {
@@ -191,7 +190,7 @@ func (c *zeromqClient) putSocket(s *zmq4.Socket) {
 	}
 
 	select {
-	case c.sockets <- s:
+	case c.sockets <- s: // Attempt to reuse socket
 	default:
 		s.Close() // Disgard socket -- over max idle
 	}
