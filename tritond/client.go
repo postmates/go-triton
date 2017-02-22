@@ -24,9 +24,12 @@ const (
 // ErrClientClosed indicates that the client has been closed and is not longer usable.
 var ErrClientClosed = errors.New("Client Closed")
 
-// Client defines the interface of a tritond client
+// Client defines the interface of a tritond client.
 type Client interface {
+	// Put sends `data` to a given partition of a stream asynchronously.
 	Put(ctx context.Context, stream, partition string, data map[string]interface{}) error
+
+	// Close flushes all in-flight `Put`s and blocks new `Put`s, effectively closing the client.
 	Close(ctx context.Context) error
 }
 
@@ -90,6 +93,12 @@ type zeromqClient struct {
 	wg      sync.WaitGroup
 }
 
+// Put writes `data` to a stream partition using a zeromq socket to the TritonD daemon.
+//
+// 	This function is intended to be both non-blocking and thread-safe. As ZeroMQ sockets
+// 	are inherently serial, they are neither so this function will create a new socket
+// 	whenever there is not an idle one avalilable. A client stores a configurable number
+// 	of idle connections that should allow this function to be very quick in the average case.
 func (c *zeromqClient) Put(ctx context.Context, stream, partition string,
 	data map[string]interface{}) error {
 
@@ -125,21 +134,29 @@ func (c *zeromqClient) Put(ctx context.Context, stream, partition string,
 	return err
 }
 
+// Close attempts to gracefully shutdown a client by both
+//	preventing new `Put`s and waiting for in-flight `Put`s
+//	terminate.
 func (c *zeromqClient) Close(ctx context.Context) error {
+	// * Prevent new sockets (getSocket)
+	// * Prevent returning in-flight sockets (putSocket)
 	close(c.done)
-	close(c.sockets)
+	close(c.sockets) // cap idle (since we have already prevented writes)
 
 	// Close out idle sockets
 	for s := range c.sockets {
 		s.Close()
 	}
 
+	// Try and terminate the zeromq context (wait for in-flight sockets)
 	termFinished := make(chan error)
 	go func() {
 		termFinished <- c.zmqCtx.Term()
 	}()
 
 	// Wait for term up until context deadline
+	//	- in-flight connection may take forever to finish.
+	//		Caller can decide how long they are willing to wait.
 	select {
 	case err := <-termFinished:
 		return err
