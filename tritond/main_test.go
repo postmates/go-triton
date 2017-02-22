@@ -12,6 +12,7 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
+// Define a global zeromq `consumer` that can be used within the tests.
 var gConsumer *consumer
 
 // Setup the testing enviroment
@@ -45,7 +46,10 @@ func (c *consumer) Start() error {
 		return err
 	}
 
-	err = c.socket.Bind("tcp://127.0.0.1:3515")
+	if err = c.socket.Bind("tcp://127.0.0.1:3515"); err != nil {
+		return err
+	}
+
 	go func() {
 		for {
 			select {
