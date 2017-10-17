@@ -8,9 +8,10 @@ import (
 // NewMockClient returns a new MockClient
 func NewMockClient() *MockClient {
 	return &MockClient{
-		lock:           new(sync.Mutex),
+		Lock:           new(sync.Mutex),
 		PartitionCount: make(map[string]int),
 		StreamData:     make(map[string]([](map[string]interface{}))),
+		Channel:        make(chan map[string]interface{}),
 	}
 }
 
@@ -18,17 +19,19 @@ func NewMockClient() *MockClient {
 type MockClient struct {
 	StreamData     map[string]([](map[string]interface{}))
 	PartitionCount map[string]int
-
-	lock *sync.Mutex
+	Channel        chan map[string]interface{}
+	Lock           *sync.Mutex
 }
 
 // Put implements the client interface
 func (c *MockClient) Put(ctx context.Context, stream, partition string, data map[string]interface{}) error {
-	c.lock.Lock()
+	c.Lock.Lock()
 	messages, _ := c.StreamData[stream]
 	c.StreamData[stream] = append(messages, data)
 	c.PartitionCount[partition]++
-	c.lock.Unlock()
+	//Code that uses TritonD client in async way might want to able to block till Put is finished for testing
+	go func() { c.Channel <- data }()
+	c.Lock.Unlock()
 	return nil
 }
 
