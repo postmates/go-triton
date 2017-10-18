@@ -25,10 +25,11 @@ type MockClient struct {
 // Put implements the client interface
 func (c *MockClient) Put(ctx context.Context, stream, partition string, data map[string]interface{}) error {
 	c.lock.Lock()
+	defer c.lock.Unlock()
 	messages, _ := c.StreamData[stream]
 	c.StreamData[stream] = append(messages, data)
 	c.PartitionCount[partition]++
-	c.lock.Unlock()
+
 	return nil
 }
 
@@ -40,10 +41,9 @@ func (c *MockClient) Close(ctx context.Context) error {
 // Reset resets MockClient to the initial state
 func (c *MockClient) Reset() {
 	c.lock.Lock()
-
+	defer c.lock.Unlock()
 	c.StreamData = make(map[string]([](map[string]interface{})))
 	c.PartitionCount = make(map[string]int)
-	c.lock.Unlock()
 }
 
 func (c *MockClient) unlock() {
