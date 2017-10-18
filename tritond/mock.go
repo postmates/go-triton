@@ -2,16 +2,16 @@ package tritond
 
 import (
 	"context"
+	"runtime"
 	"sync"
 )
 
 // NewMockClient returns a new MockClient
 func NewMockClient() *MockClient {
 	return &MockClient{
-		Lock:           new(sync.Mutex),
+		lock:           new(sync.Mutex),
 		PartitionCount: make(map[string]int),
 		StreamData:     make(map[string]([](map[string]interface{}))),
-		Channel:        make(chan map[string]interface{}),
 	}
 }
 
@@ -19,25 +19,43 @@ func NewMockClient() *MockClient {
 type MockClient struct {
 	StreamData     map[string]([](map[string]interface{}))
 	PartitionCount map[string]int
-	Channel        chan map[string]interface{}
-	Lock           *sync.Mutex
+	lock           *sync.Mutex
 }
 
 // Put implements the client interface
 func (c *MockClient) Put(ctx context.Context, stream, partition string, data map[string]interface{}) error {
-	c.Lock.Lock()
+	c.lock.Lock()
 	messages, _ := c.StreamData[stream]
 	c.StreamData[stream] = append(messages, data)
 	c.PartitionCount[partition]++
-	//Code that uses TritonD client in async way might want to able to block till Put is finished for testing
-	go func() { c.Channel <- data }()
-	c.Lock.Unlock()
+	c.lock.Unlock()
 	return nil
 }
 
 // Close is a noop for a mock client. Meets `Client` inteface
 func (c *MockClient) Close(ctx context.Context) error {
 	return nil
+}
+
+// Reset resets MockClient to the initial state
+func (c *MockClient) Reset() {
+	c.lock.Lock()
+
+	c.StreamData = make(map[string]([](map[string]interface{})))
+	c.PartitionCount = make(map[string]int)
+	c.lock.Unlock()
+}
+
+func (c *MockClient) unlock() {
+	c.lock.Unlock()
+}
+
+// PrepareForAssert prepares MockClient to be asserted when it was used in async code.
+// Test code *must* defer on result of this method
+func (c *MockClient) PrepareForAssert() func() {
+	runtime.Gosched()
+	c.lock.Lock()
+	return c.unlock
 }
 
 type noopClient struct{}
