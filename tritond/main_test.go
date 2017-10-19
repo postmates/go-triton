@@ -10,7 +10,6 @@ import (
 
 	"github.com/pebbe/zmq4"
 	"github.com/tinylib/msgp/msgp"
-	"runtime"
 )
 
 // Define a global zeromq `consumer` that can be used within the tests.
@@ -81,7 +80,6 @@ func (c *consumer) Start() error {
 			}
 		}
 	}()
-	runtime.Gosched()
 
 	return nil
 }
