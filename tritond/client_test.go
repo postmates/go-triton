@@ -21,7 +21,7 @@ func TestPut(t *testing.T) {
 	data := map[string]interface{}{
 		"object_type":   "delivery",
 		"delivery_uuid": "example-delivery-uuid",
-		"ts":            time.Now(),
+		"ts":            time.Now().Truncate(0),
 		"version":       int64(1),
 		"data": map[string]interface{}{
 			"couriers": []interface{}{"a", "b", "c"},
@@ -53,7 +53,7 @@ func TestPutConcurrent(t *testing.T) {
 	data := map[string]interface{}{
 		"object_type":   "delivery",
 		"delivery_uuid": "example-delivery-uuid",
-		"ts":            time.Now(),
+		"ts":            time.Now().Truncate(0),
 		"version":       int64(1),
 		"data": map[string]interface{}{
 			"couriers": []interface{}{"a", "b", "c"},

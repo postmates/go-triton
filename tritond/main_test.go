@@ -10,6 +10,7 @@ import (
 
 	"github.com/pebbe/zmq4"
 	"github.com/tinylib/msgp/msgp"
+	"sync"
 )
 
 // Define a global zeromq `consumer` that can be used within the tests.
@@ -40,20 +41,26 @@ type consumer struct {
 }
 
 func (c *consumer) Start() error {
+	wg := new(sync.WaitGroup)
+	wg.Add(1)
 	var err error
-	c.socket, err = zmq4.NewSocket(zmq4.PULL)
-	if err != nil {
-		return err
-	}
-
-	if err = c.socket.Bind("tcp://127.0.0.1:3515"); err != nil {
-		return err
-	}
 
 	go func() {
+
+		c.socket, err = zmq4.NewSocket(zmq4.PULL)
+		if err != nil {
+			return
+		}
+
+		if err = c.socket.Bind("tcp://127.0.0.1:3515"); err != nil {
+			panic(err)
+		}
+		wg.Done()
 		for {
 			select {
 			case <-c.close:
+				c.socket.Close()
+
 				return
 			default:
 				if msg, err := c.socket.RecvMessageBytes(0); err == nil {
@@ -80,11 +87,13 @@ func (c *consumer) Start() error {
 			}
 		}
 	}()
-
+	wg.Wait()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
-func (c *consumer) Stop() error {
+func (c *consumer) Stop()  {
 	close(c.close)
-	return c.socket.Close()
 }
