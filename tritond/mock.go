@@ -2,9 +2,10 @@ package tritond
 
 import (
 	"context"
-	"runtime"
 	"sync"
 )
+
+const defaultMockWriteBuffer = 100
 
 // NewMockClient returns a new MockClient
 func NewMockClient() *MockClient {
@@ -12,6 +13,7 @@ func NewMockClient() *MockClient {
 		lock:           new(sync.Mutex),
 		PartitionCount: make(map[string]int),
 		StreamData:     make(map[string]([](map[string]interface{}))),
+		WriteSignal:    make(chan bool, defaultMockWriteBuffer),
 	}
 }
 
@@ -19,6 +21,7 @@ func NewMockClient() *MockClient {
 type MockClient struct {
 	StreamData     map[string]([](map[string]interface{}))
 	PartitionCount map[string]int
+	WriteSignal    chan bool
 	lock           *sync.Mutex
 }
 
@@ -29,6 +32,13 @@ func (c *MockClient) Put(ctx context.Context, stream, partition string, data map
 	messages, _ := c.StreamData[stream]
 	c.StreamData[stream] = append(messages, data)
 	c.PartitionCount[partition]++
+
+	select {
+	case c.WriteSignal <- true:
+	default:
+		// If buffer is full, don't block.
+		// User should set the buffer to an appropriate size if they care about this signal
+	}
 
 	return nil
 }
@@ -44,18 +54,7 @@ func (c *MockClient) Reset() {
 	defer c.lock.Unlock()
 	c.StreamData = make(map[string]([](map[string]interface{})))
 	c.PartitionCount = make(map[string]int)
-}
-
-func (c *MockClient) unlock() {
-	c.lock.Unlock()
-}
-
-// PrepareForAssert prepares MockClient to be asserted when it was used in async code.
-// Test code *must* defer on result of this method
-func (c *MockClient) PrepareForAssert() func() {
-	runtime.Gosched()
-	c.lock.Lock()
-	return c.unlock
+	c.WriteSignal = make(chan bool, cap(c.WriteSignal))
 }
 
 type noopClient struct{}
