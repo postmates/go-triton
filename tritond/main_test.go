@@ -8,9 +8,10 @@ import (
 	"os"
 	"testing"
 
+	"sync"
+
 	"github.com/pebbe/zmq4"
 	"github.com/tinylib/msgp/msgp"
-	"sync"
 )
 
 // Define a global zeromq `consumer` that can be used within the tests.
@@ -94,6 +95,6 @@ func (c *consumer) Start() error {
 	return nil
 }
 
-func (c *consumer) Stop()  {
+func (c *consumer) Stop() {
 	close(c.close)
 }

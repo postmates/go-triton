@@ -15,6 +15,7 @@ func TestMockClientPut(t *testing.T) {
 		"example2": "world",
 	}
 	err := c.Put(context.Background(), "delivery", "delivery-uuid", data)
+	assert.True(t, <-c.WriteSignal)
 	assert.NoError(t, err)
 	assert.EqualValues(t, data, c.StreamData["delivery"][0])
 }
