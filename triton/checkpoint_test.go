@@ -66,7 +66,7 @@ func TestCheckpoint(t *testing.T) {
 
 	seqNum, err := c.LastSequenceNumber(sid)
 	if err != nil {
-		t.Errorf("Failed to load sequence number", err)
+		t.Errorf("Failed to load sequence number: %v", err)
 		return
 	}
 
