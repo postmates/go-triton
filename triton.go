@@ -17,7 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/codegangsta/cli"
+	"github.com/urfave/cli"
 	"github.com/getsentry/raven-go"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
