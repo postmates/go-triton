@@ -94,28 +94,36 @@ var (
 
 	// api compatibility, based on changes in header files
 	api = map[[2]int]int{
-		[2]int{0, 0}: 1,
-		[2]int{0, 1}: 2,
-		[2]int{0, 2}: 3,
-		[2]int{0, 3}: 3,
-		[2]int{0, 4}: 3,
-		[2]int{0, 5}: 4,
-		[2]int{0, 6}: 4,
-		[2]int{0, 7}: 4,
-		[2]int{0, 8}: 4,
-		[2]int{1, 0}: 5,
-		[2]int{1, 1}: 6,
-		[2]int{1, 2}: 6,
-		[2]int{1, 3}: 6,
-		[2]int{1, 4}: 6,
-		[2]int{1, 5}: 6,
-		[2]int{1, 6}: 7,
-		[2]int{2, 0}: 8,
-		[2]int{2, 1}: 9,
-		[2]int{2, 2}: 9,
-		[2]int{2, 3}: 9,
-		[2]int{2, 4}: 9,
-		[2]int{2, 5}: 9,
+		[2]int{0, 0}:  1,
+		[2]int{0, 1}:  2,
+		[2]int{0, 2}:  3,
+		[2]int{0, 3}:  3,
+		[2]int{0, 4}:  3,
+		[2]int{0, 5}:  4,
+		[2]int{0, 6}:  4,
+		[2]int{0, 7}:  4,
+		[2]int{0, 8}:  4,
+		[2]int{0, 9}:  4,
+		[2]int{0, 10}: 4,
+		[2]int{1, 0}:  5,
+		[2]int{1, 1}:  6,
+		[2]int{1, 2}:  6,
+		[2]int{1, 3}:  6,
+		[2]int{1, 4}:  6,
+		[2]int{1, 5}:  6,
+		[2]int{1, 6}:  7,
+		[2]int{1, 7}:  7,
+		[2]int{1, 8}:  7,
+		[2]int{2, 0}:  8,
+		[2]int{2, 1}:  9,
+		[2]int{2, 2}:  9,
+		[2]int{2, 3}:  9,
+		[2]int{2, 4}:  9,
+		[2]int{2, 5}:  9,
+		[2]int{3, 0}:  10,
+		[2]int{3, 1}:  10,
+		[2]int{3, 2}:  10,
+		[2]int{3, 3}:  10,
 	}
 )
 
@@ -141,12 +149,13 @@ func init() {
 
 	var err error
 	defaultCtx = &Context{}
-	defaultCtx.ctx, err = C.zmq_ctx_new()
+	defaultCtx.ctx, err = C.zmq4_ctx_new()
 	if defaultCtx.ctx == nil {
 		initContextError = fmt.Errorf("Init of ZeroMQ context failed: %v", errget(err))
 		return
 	}
 	defaultCtx.opened = true
+	defaultCtx.retryEINTR = true
 }
 
 //. Util
@@ -177,9 +186,10 @@ const (
 A context that is not the default context.
 */
 type Context struct {
-	ctx    unsafe.Pointer
-	opened bool
-	err    error
+	ctx        unsafe.Pointer
+	retryEINTR bool
+	opened     bool
+	err        error
 }
 
 // Create a new context.
@@ -188,12 +198,13 @@ func NewContext() (ctx *Context, err error) {
 		return nil, initVersionError
 	}
 	ctx = &Context{}
-	c, e := C.zmq_ctx_new()
+	c, e := C.zmq4_ctx_new()
 	if c == nil {
 		err = errget(e)
 		ctx.err = err
 	} else {
 		ctx.ctx = c
+		ctx.retryEINTR = true
 		ctx.opened = true
 		runtime.SetFinalizer(ctx, (*Context).Term)
 	}
@@ -223,7 +234,14 @@ For linger behavior, see: http://api.zeromq.org/4-1:zmq-ctx-term
 func (ctx *Context) Term() error {
 	if ctx.opened {
 		ctx.opened = false
-		n, err := C.zmq_ctx_term(ctx.ctx)
+		var n C.int
+		var err error
+		for {
+			n, err = C.zmq4_ctx_term(ctx.ctx)
+			if n == 0 || !ctx.retry(err) {
+				break
+			}
+		}
 		if n != 0 {
 			ctx.err = errget(err)
 		}
@@ -235,7 +253,7 @@ func getOption(ctx *Context, o C.int) (int, error) {
 	if !ctx.opened {
 		return 0, ErrorContextClosed
 	}
-	nc, err := C.zmq_ctx_get(ctx.ctx, o)
+	nc, err := C.zmq4_ctx_get(ctx.ctx, o)
 	n := int(nc)
 	if n < 0 {
 		return n, errget(err)
@@ -353,11 +371,25 @@ func (ctx *Context) GetBlocky() (bool, error) {
 	return true, e
 }
 
+/*
+Returns the retry after EINTR setting in the default context.
+*/
+func GetRetryAfterEINTR() bool {
+	return defaultCtx.GetRetryAfterEINTR()
+}
+
+/*
+Returns the retry after EINTR setting.
+*/
+func (ctx *Context) GetRetryAfterEINTR() bool {
+	return ctx.retryEINTR
+}
+
 func setOption(ctx *Context, o C.int, n int) error {
 	if !ctx.opened {
 		return ErrorContextClosed
 	}
-	i, err := C.zmq_ctx_set(ctx.ctx, o, C.int(n))
+	i, err := C.zmq4_ctx_set(ctx.ctx, o, C.int(n))
 	if int(i) != 0 {
 		return errget(err)
 	}
@@ -569,6 +601,24 @@ func (ctx *Context) SetBlocky(i bool) error {
 	return setOption(ctx, C.ZMQ_BLOCKY, n)
 }
 
+/*
+Sets the retry after EINTR setting in the default context.
+
+Initital value is true.
+*/
+func SetRetryAfterEINTR(retry bool) {
+	defaultCtx.SetRetryAfterEINTR(retry)
+}
+
+/*
+Sets the retry after EINTR setting.
+
+Initital value is true.
+*/
+func (ctx *Context) SetRetryAfterEINTR(retry bool) {
+	ctx.retryEINTR = retry
+}
+
 //. Sockets
 
 // Specifies the type of a socket, used by NewSocket()
@@ -657,19 +707,23 @@ type Event int
 
 const (
 	// Flags for (*Socket)Monitor() and (*Socket)RecvEvent()
-	// See: http://api.zeromq.org/4-1:zmq-socket-monitor#toc3
-	EVENT_ALL             = Event(C.ZMQ_EVENT_ALL)
-	EVENT_CONNECTED       = Event(C.ZMQ_EVENT_CONNECTED)
-	EVENT_CONNECT_DELAYED = Event(C.ZMQ_EVENT_CONNECT_DELAYED)
-	EVENT_CONNECT_RETRIED = Event(C.ZMQ_EVENT_CONNECT_RETRIED)
-	EVENT_LISTENING       = Event(C.ZMQ_EVENT_LISTENING)
-	EVENT_BIND_FAILED     = Event(C.ZMQ_EVENT_BIND_FAILED)
-	EVENT_ACCEPTED        = Event(C.ZMQ_EVENT_ACCEPTED)
-	EVENT_ACCEPT_FAILED   = Event(C.ZMQ_EVENT_ACCEPT_FAILED)
-	EVENT_CLOSED          = Event(C.ZMQ_EVENT_CLOSED)
-	EVENT_CLOSE_FAILED    = Event(C.ZMQ_EVENT_CLOSE_FAILED)
-	EVENT_DISCONNECTED    = Event(C.ZMQ_EVENT_DISCONNECTED)
-	EVENT_MONITOR_STOPPED = Event(C.ZMQ_EVENT_MONITOR_STOPPED)
+	// See: http://api.zeromq.org/4-3:zmq-socket-monitor#toc3
+	EVENT_ALL                        = Event(C.ZMQ_EVENT_ALL)
+	EVENT_CONNECTED                  = Event(C.ZMQ_EVENT_CONNECTED)
+	EVENT_CONNECT_DELAYED            = Event(C.ZMQ_EVENT_CONNECT_DELAYED)
+	EVENT_CONNECT_RETRIED            = Event(C.ZMQ_EVENT_CONNECT_RETRIED)
+	EVENT_LISTENING                  = Event(C.ZMQ_EVENT_LISTENING)
+	EVENT_BIND_FAILED                = Event(C.ZMQ_EVENT_BIND_FAILED)
+	EVENT_ACCEPTED                   = Event(C.ZMQ_EVENT_ACCEPTED)
+	EVENT_ACCEPT_FAILED              = Event(C.ZMQ_EVENT_ACCEPT_FAILED)
+	EVENT_CLOSED                     = Event(C.ZMQ_EVENT_CLOSED)
+	EVENT_CLOSE_FAILED               = Event(C.ZMQ_EVENT_CLOSE_FAILED)
+	EVENT_DISCONNECTED               = Event(C.ZMQ_EVENT_DISCONNECTED)
+	EVENT_MONITOR_STOPPED            = Event(C.ZMQ_EVENT_MONITOR_STOPPED)
+	EVENT_HANDSHAKE_FAILED_NO_DETAIL = Event(C.ZMQ_EVENT_HANDSHAKE_FAILED_NO_DETAIL)
+	EVENT_HANDSHAKE_SUCCEEDED        = Event(C.ZMQ_EVENT_HANDSHAKE_SUCCEEDED)
+	EVENT_HANDSHAKE_FAILED_PROTOCOL  = Event(C.ZMQ_EVENT_HANDSHAKE_FAILED_PROTOCOL)
+	EVENT_HANDSHAKE_FAILED_AUTH      = Event(C.ZMQ_EVENT_HANDSHAKE_FAILED_AUTH)
 )
 
 /*
@@ -709,6 +763,20 @@ func (e Event) String() string {
 	}
 	if e&EVENT_DISCONNECTED != 0 {
 		ee = append(ee, "EVENT_DISCONNECTED")
+	}
+	if minor >= 3 {
+		if e&EVENT_HANDSHAKE_FAILED_NO_DETAIL != 0 {
+			ee = append(ee, "EVENT_HANDSHAKE_FAILED_NO_DETAIL")
+		}
+		if e&EVENT_HANDSHAKE_SUCCEEDED != 0 {
+			ee = append(ee, "EVENT_HANDSHAKE_SUCCEEDED")
+		}
+		if e&EVENT_HANDSHAKE_FAILED_PROTOCOL != 0 {
+			ee = append(ee, "EVENT_HANDSHAKE_FAILED_PROTOCOL")
+		}
+		if e&EVENT_HANDSHAKE_FAILED_AUTH != 0 {
+			ee = append(ee, "EVENT_HANDSHAKE_FAILED_AUTH")
+		}
 	}
 	if len(ee) == 0 {
 		return "<NONE>"
@@ -834,7 +902,14 @@ func (ctx *Context) NewSocket(t Type) (soc *Socket, err error) {
 	if !ctx.opened {
 		return soc, ErrorContextClosed
 	}
-	s, e := C.zmq_socket(ctx.ctx, C.int(t))
+	var s unsafe.Pointer
+	var e error
+	for {
+		s, e = C.zmq4_socket(ctx.ctx, C.int(t))
+		if s != nil || !ctx.retry(e) {
+			break
+		}
+	}
 	if s == nil {
 		err = errget(e)
 		soc.err = err
@@ -851,7 +926,15 @@ func (ctx *Context) NewSocket(t Type) (soc *Socket, err error) {
 func (soc *Socket) Close() error {
 	if soc.opened {
 		soc.opened = false
-		if i, err := C.zmq_close(soc.soc); int(i) != 0 {
+		var i C.int
+		var err error
+		for {
+			i, err = C.zmq4_close(soc.soc)
+			if i == 0 || !soc.ctx.retry(err) {
+				break
+			}
+		}
+		if int(i) != 0 {
 			soc.err = errget(err)
 		}
 		soc.soc = unsafe.Pointer(nil)
@@ -879,7 +962,15 @@ func (soc *Socket) Bind(endpoint string) error {
 	}
 	s := C.CString(endpoint)
 	defer C.free(unsafe.Pointer(s))
-	if i, err := C.zmq_bind(soc.soc, s); int(i) != 0 {
+	var i C.int
+	var err error
+	for {
+		i, err = C.zmq4_bind(soc.soc, s)
+		if i == 0 || !soc.ctx.retry(err) {
+			break
+		}
+	}
+	if int(i) != 0 {
 		return errget(err)
 	}
 	return nil
@@ -896,7 +987,15 @@ func (soc *Socket) Unbind(endpoint string) error {
 	}
 	s := C.CString(endpoint)
 	defer C.free(unsafe.Pointer(s))
-	if i, err := C.zmq_unbind(soc.soc, s); int(i) != 0 {
+	var i C.int
+	var err error
+	for {
+		i, err = C.zmq4_unbind(soc.soc, s)
+		if i == 0 || !soc.ctx.retry(err) {
+			break
+		}
+	}
+	if int(i) != 0 {
 		return errget(err)
 	}
 	return nil
@@ -913,7 +1012,15 @@ func (soc *Socket) Connect(endpoint string) error {
 	}
 	s := C.CString(endpoint)
 	defer C.free(unsafe.Pointer(s))
-	if i, err := C.zmq_connect(soc.soc, s); int(i) != 0 {
+	var i C.int
+	var err error
+	for {
+		i, err = C.zmq4_connect(soc.soc, s)
+		if i == 0 || !soc.ctx.retry(err) {
+			break
+		}
+	}
+	if int(i) != 0 {
 		return errget(err)
 	}
 	return nil
@@ -930,7 +1037,15 @@ func (soc *Socket) Disconnect(endpoint string) error {
 	}
 	s := C.CString(endpoint)
 	defer C.free(unsafe.Pointer(s))
-	if i, err := C.zmq_disconnect(soc.soc, s); int(i) != 0 {
+	var i C.int
+	var err error
+	for {
+		i, err = C.zmq4_disconnect(soc.soc, s)
+		if i == 0 || !soc.ctx.retry(err) {
+			break
+		}
+	}
+	if int(i) != 0 {
 		return errget(err)
 	}
 	return nil
@@ -956,12 +1071,17 @@ func (soc *Socket) RecvBytes(flags Flag) ([]byte, error) {
 		return []byte{}, ErrorSocketClosed
 	}
 	var msg C.zmq_msg_t
-	if i, err := C.zmq_msg_init(&msg); i != 0 {
-		return []byte{}, errget(err)
-	}
+	C.zmq_msg_init(&msg)
 	defer C.zmq_msg_close(&msg)
 
-	size, err := C.zmq_msg_recv(&msg, soc.soc, C.int(flags))
+	var size C.int
+	var err error
+	for {
+		size, err = C.zmq4_msg_recv(&msg, soc.soc, C.int(flags))
+		if size >= 0 || !soc.ctx.retry(err) {
+			break
+		}
+	}
 	if size < 0 {
 		return []byte{}, errget(err)
 	}
@@ -995,7 +1115,14 @@ func (soc *Socket) SendBytes(data []byte, flags Flag) (int, error) {
 	if len(data) == 0 {
 		d = []byte{0}
 	}
-	size, err := C.zmq_send(soc.soc, unsafe.Pointer(&d[0]), C.size_t(len(data)), C.int(flags))
+	var size C.int
+	var err error
+	for {
+		size, err = C.zmq4_send(soc.soc, unsafe.Pointer(&d[0]), C.size_t(len(data)), C.int(flags))
+		if size >= 0 || !soc.ctx.retry(err) {
+			break
+		}
+	}
 	if size < 0 {
 		return int(size), errget(err)
 	}
@@ -1074,7 +1201,15 @@ func (soc *Socket) Monitor(addr string, events Event) error {
 		return ErrorSocketClosed
 	}
 	if addr == "" {
-		if i, err := C.zmq_socket_monitor(soc.soc, nil, C.int(events)); i != 0 {
+		var i C.int
+		var err error
+		for {
+			i, err = C.zmq4_socket_monitor(soc.soc, nil, C.int(events))
+			if i == 0 || !soc.ctx.retry(err) {
+				break
+			}
+		}
+		if i != 0 {
 			return errget(err)
 		}
 		return nil
@@ -1082,7 +1217,15 @@ func (soc *Socket) Monitor(addr string, events Event) error {
 
 	s := C.CString(addr)
 	defer C.free(unsafe.Pointer(s))
-	if i, err := C.zmq_socket_monitor(soc.soc, s, C.int(events)); i != 0 {
+	var i C.int
+	var err error
+	for {
+		i, err = C.zmq4_socket_monitor(soc.soc, s, C.int(events))
+		if i == 0 || !soc.ctx.retry(err) {
+			break
+		}
+	}
+	if i != 0 {
 		return errget(err)
 	}
 	return nil
@@ -1102,12 +1245,16 @@ func (soc *Socket) RecvEvent(flags Flag) (event_type Event, addr string, value i
 		return EVENT_ALL, "", 0, ErrorSocketClosed
 	}
 	var msg C.zmq_msg_t
-	if i, e := C.zmq_msg_init(&msg); i != 0 {
-		err = errget(e)
-		return
-	}
+	C.zmq_msg_init(&msg)
 	defer C.zmq_msg_close(&msg)
-	size, e := C.zmq_msg_recv(&msg, soc.soc, C.int(flags))
+	var size C.int
+	var e error
+	for {
+		size, e = C.zmq4_msg_recv(&msg, soc.soc, C.int(flags))
+		if size >= 0 || !soc.ctx.retry(e) {
+			break
+		}
+	}
 	if size < 0 {
 		err = errget(e)
 		return
@@ -1154,7 +1301,13 @@ func Proxy(frontend, backend, capture *Socket) error {
 	if capture != nil {
 		capt = capture.soc
 	}
-	_, err := C.zmq_proxy(frontend.soc, backend.soc, capt)
+	var err error
+	for {
+		_, err = C.zmq4_proxy(frontend.soc, backend.soc, capt)
+		if !frontend.ctx.retry(err) {
+			break
+		}
+	}
 	return errget(err)
 }
 
@@ -1179,7 +1332,14 @@ func ProxySteerable(frontend, backend, capture, control *Socket) error {
 	if control != nil {
 		ctrl = control.soc
 	}
-	i, err := C.zmq_proxy_steerable(frontend.soc, backend.soc, capt, ctrl)
+	var i C.int
+	var err error
+	for {
+		i, err = C.zmq4_proxy_steerable(frontend.soc, backend.soc, capt, ctrl)
+		if i >= 0 || !frontend.ctx.retry(err) {
+			break
+		}
+	}
 	if i < 0 {
 		return errget(err)
 	}
@@ -1242,7 +1402,7 @@ func NewCurveKeypair() (z85_public_key, z85_secret_key string, err error) {
 		return "", "", initVersionError
 	}
 	var pubkey, seckey [41]byte
-	if i, err := C.zmq_curve_keypair((*C.char)(unsafe.Pointer(&pubkey[0])), (*C.char)(unsafe.Pointer(&seckey[0]))); i != 0 {
+	if i, err := C.zmq4_curve_keypair((*C.char)(unsafe.Pointer(&pubkey[0])), (*C.char)(unsafe.Pointer(&seckey[0]))); i != 0 {
 		return "", "", errget(err)
 	}
 	return string(pubkey[:40]), string(seckey[:40]), nil
@@ -1283,12 +1443,16 @@ func (soc *Socket) RecvBytesWithMetadata(flags Flag, properties ...string) (msg 
 	metadata = make(map[string]string)
 
 	var m C.zmq_msg_t
-	if i, err := C.zmq_msg_init(&m); i != 0 {
-		return []byte{}, metadata, errget(err)
-	}
+	C.zmq_msg_init(&m)
 	defer C.zmq_msg_close(&m)
 
-	size, err := C.zmq_msg_recv(&m, soc.soc, C.int(flags))
+	var size C.int
+	for {
+		size, err = C.zmq4_msg_recv(&m, soc.soc, C.int(flags))
+		if size >= 0 || !soc.ctx.retry(err) {
+			break
+		}
+	}
 	if size < 0 {
 		return []byte{}, metadata, errget(err)
 	}
@@ -1301,8 +1465,8 @@ func (soc *Socket) RecvBytesWithMetadata(flags Flag, properties ...string) (msg 
 	if minor > 0 {
 		for _, p := range properties {
 			ps := C.CString(p)
-			s, err := C.zmq_msg_gets(&m, ps)
-			if err == nil {
+			s := C.zmq4_msg_gets(&m, ps)
+			if s != nil {
 				metadata[p] = C.GoString(s)
 			}
 			C.free(unsafe.Pointer(ps))
