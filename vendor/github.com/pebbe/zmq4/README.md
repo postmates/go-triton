@@ -1,5 +1,17 @@
 A Go interface to [ZeroMQ](http://www.zeromq.org/) version 4.
 
+
+----------------------------------------------------------------
+
+## Warning
+
+Starting with Go 1.14, on Unix-like systems, you will get a lot of
+interrupted signal calls. See the top of a package documentation
+for a fix.
+
+----------------------------------------------------------------
+
+
 [![Go Report Card](https://goreportcard.com/badge/github.com/pebbe/zmq4)](https://goreportcard.com/report/github.com/pebbe/zmq4)
 [![GoDoc](https://godoc.org/github.com/pebbe/zmq4?status.svg)](https://godoc.org/github.com/pebbe/zmq4)
 
@@ -28,6 +40,27 @@ Keywords: zmq, zeromq, 0mq, networks, distributed computing, message passing, fa
  * [Mangos](https://github.com/go-mangos/mangos) — An implementation in pure Go of the SP ("Scalable Protocols") protocols
  * [go-nanomsg](https://github.com/op/go-nanomsg) — Language bindings for nanomsg in Go
  * [goczmq](https://github.com/zeromq/goczmq) — A Go interface to CZMQ
+
+## Requirements
+
+zmq4 is just a wrapper for the ZeroMQ library. It doesn't include the
+library itself. So you need to have ZeroMQ installed, including its
+development files. On Linux and Darwin you can check this with (`$` is
+the command prompt):
+
+```
+$ pkg-config --modversion libzmq
+4.3.1
+```
+
+The Go compiler must be able to compile C code. You can check this
+with:
+```
+$ go env CGO_ENABLED
+1
+```
+
+You can't do cross-compilation. That would disable C.
 
 ## Install
 
