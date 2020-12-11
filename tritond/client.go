@@ -99,23 +99,14 @@ type zeromqClient struct {
 // 	are inherently serial, they are neither so this function will create a new socket
 // 	whenever there is not an idle one avalilable. A client stores a configurable number
 // 	of idle connections that should allow this function to be very quick in the average case.
-func (c *zeromqClient) Put(ctx context.Context, stream, partition string,
-	data map[string]interface{}) error {
-
-	// Get socket from pool
-	s, socketErr := c.getSocket(ctx)
-	if socketErr != nil {
-		return socketErr
-	}
-	defer c.putSocket(s)
-
+func (c *zeromqClient) Put(ctx context.Context, stream, partitionKey string, data map[string]interface{}) error {
 	// Form header
 	header := struct {
 		StreamName   string `json:"stream_name"`
 		PartitionKey string `json:"partition_key"`
 	}{
 		StreamName:   stream,
-		PartitionKey: partition,
+		PartitionKey: partitionKey,
 	}
 	headerData, err := json.Marshal(header)
 	if err != nil {
@@ -130,8 +121,22 @@ func (c *zeromqClient) Put(ctx context.Context, stream, partition string,
 	}
 	w.Flush()
 
+	// Get a socket from the pool of idle sockets available for reuse
+	s, err := c.getSocket(ctx)
+	if err != nil {
+		return err
+	}
+
 	_, err = s.SendMessageDontwait(headerData, body.Bytes())
-	return err
+	if err != nil {
+		// Close the socket if we failed to send data through it
+		s.Close()
+		return err
+	}
+
+	// Add the socket to the list of idle sockets available for reuse
+	c.putSocket(s)
+	return nil
 }
 
 // Close attempts to gracefully shutdown a client by both
@@ -202,13 +207,14 @@ func (c *zeromqClient) putSocket(s *zmq4.Socket) {
 	select {
 	case <-c.done:
 		s.Close() // Close this socket
+		return
 	default:
 		// fallthrough
 	}
 
 	select {
-	case c.sockets <- s: // Attempt to reuse socket
+	case c.sockets <- s: // Attempt to reuse the socket
 	default:
-		s.Close() // Disgard socket -- over max idle
+		s.Close() // Disregard the socket -- over max idle
 	}
 }
