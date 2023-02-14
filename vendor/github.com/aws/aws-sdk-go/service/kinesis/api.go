@@ -3233,6 +3233,8 @@ func (c *Kinesis) SubscribeToShardWithContext(ctx aws.Context, input *SubscribeT
 	return out, req.Send()
 }
 
+var _ awserr.Error
+
 // SubscribeToShardEventStream provides the event stream handling for the SubscribeToShard.
 type SubscribeToShardEventStream struct {
 
@@ -3316,6 +3318,7 @@ func (e eventTypeForSubscribeToShardEventStreamOutputEvent) UnmarshalerForEventN
 // These events are:
 //
 //     * SubscribeToShardEvent
+//     * SubscribeToShardEventStreamUnknownEvent
 func (es *SubscribeToShardEventStream) Events() <-chan SubscribeToShardEventStreamEvent {
 	return es.Reader.Events()
 }
@@ -4603,8 +4606,8 @@ func (s *EnhancedMonitoringOutput) SetStreamName(v string) *EnhancedMonitoringOu
 
 // The provided iterator exceeds the maximum age allowed.
 type ExpiredIteratorException struct {
-	_            struct{} `type:"structure"`
-	respMetadata protocol.ResponseMetadata
+	_            struct{}                  `type:"structure"`
+	RespMetadata protocol.ResponseMetadata `json:"-" xml:"-"`
 
 	// A message that provides information about the error.
 	Message_ *string `locationName:"message" type:"string"`
@@ -4622,17 +4625,17 @@ func (s ExpiredIteratorException) GoString() string {
 
 func newErrorExpiredIteratorException(v protocol.ResponseMetadata) error {
 	return &ExpiredIteratorException{
-		respMetadata: v,
+		RespMetadata: v,
 	}
 }
 
 // Code returns the exception type name.
-func (s ExpiredIteratorException) Code() string {
+func (s *ExpiredIteratorException) Code() string {
 	return "ExpiredIteratorException"
 }
 
 // Message returns the exception's message.
-func (s ExpiredIteratorException) Message() string {
+func (s *ExpiredIteratorException) Message() string {
 	if s.Message_ != nil {
 		return *s.Message_
 	}
@@ -4640,28 +4643,28 @@ func (s ExpiredIteratorException) Message() string {
 }
 
 // OrigErr always returns nil, satisfies awserr.Error interface.
-func (s ExpiredIteratorException) OrigErr() error {
+func (s *ExpiredIteratorException) OrigErr() error {
 	return nil
 }
 
-func (s ExpiredIteratorException) Error() string {
+func (s *ExpiredIteratorException) Error() string {
 	return fmt.Sprintf("%s: %s", s.Code(), s.Message())
 }
 
 // Status code returns the HTTP status code for the request's response error.
-func (s ExpiredIteratorException) StatusCode() int {
-	return s.respMetadata.StatusCode
+func (s *ExpiredIteratorException) StatusCode() int {
+	return s.RespMetadata.StatusCode
 }
 
 // RequestID returns the service's response RequestID for request.
-func (s ExpiredIteratorException) RequestID() string {
-	return s.respMetadata.RequestID
+func (s *ExpiredIteratorException) RequestID() string {
+	return s.RespMetadata.RequestID
 }
 
 // The pagination token passed to the operation is expired.
 type ExpiredNextTokenException struct {
-	_            struct{} `type:"structure"`
-	respMetadata protocol.ResponseMetadata
+	_            struct{}                  `type:"structure"`
+	RespMetadata protocol.ResponseMetadata `json:"-" xml:"-"`
 
 	Message_ *string `locationName:"message" type:"string"`
 }
@@ -4678,17 +4681,17 @@ func (s ExpiredNextTokenException) GoString() string {
 
 func newErrorExpiredNextTokenException(v protocol.ResponseMetadata) error {
 	return &ExpiredNextTokenException{
-		respMetadata: v,
+		RespMetadata: v,
 	}
 }
 
 // Code returns the exception type name.
-func (s ExpiredNextTokenException) Code() string {
+func (s *ExpiredNextTokenException) Code() string {
 	return "ExpiredNextTokenException"
 }
 
 // Message returns the exception's message.
-func (s ExpiredNextTokenException) Message() string {
+func (s *ExpiredNextTokenException) Message() string {
 	if s.Message_ != nil {
 		return *s.Message_
 	}
@@ -4696,22 +4699,22 @@ func (s ExpiredNextTokenException) Message() string {
 }
 
 // OrigErr always returns nil, satisfies awserr.Error interface.
-func (s ExpiredNextTokenException) OrigErr() error {
+func (s *ExpiredNextTokenException) OrigErr() error {
 	return nil
 }
 
-func (s ExpiredNextTokenException) Error() string {
+func (s *ExpiredNextTokenException) Error() string {
 	return fmt.Sprintf("%s: %s", s.Code(), s.Message())
 }
 
 // Status code returns the HTTP status code for the request's response error.
-func (s ExpiredNextTokenException) StatusCode() int {
-	return s.respMetadata.StatusCode
+func (s *ExpiredNextTokenException) StatusCode() int {
+	return s.RespMetadata.StatusCode
 }
 
 // RequestID returns the service's response RequestID for request.
-func (s ExpiredNextTokenException) RequestID() string {
-	return s.respMetadata.RequestID
+func (s *ExpiredNextTokenException) RequestID() string {
+	return s.RespMetadata.RequestID
 }
 
 // Represents the input for GetRecords.
@@ -5075,8 +5078,8 @@ func (s IncreaseStreamRetentionPeriodOutput) GoString() string {
 }
 
 type InternalFailureException struct {
-	_            struct{} `type:"structure"`
-	respMetadata protocol.ResponseMetadata
+	_            struct{}                  `type:"structure"`
+	RespMetadata protocol.ResponseMetadata `json:"-" xml:"-"`
 
 	Message_ *string `locationName:"message" type:"string"`
 }
@@ -5108,6 +5111,8 @@ func (s *InternalFailureException) UnmarshalEvent(
 	return nil
 }
 
+// MarshalEvent marshals the type into an stream event value. This method
+// should only used internally within the SDK's EventStream handling.
 func (s *InternalFailureException) MarshalEvent(pm protocol.PayloadMarshaler) (msg eventstream.Message, err error) {
 	msg.Headers.Set(eventstreamapi.MessageTypeHeader, eventstream.StringValue(eventstreamapi.ExceptionMessageType))
 	var buf bytes.Buffer
@@ -5120,17 +5125,17 @@ func (s *InternalFailureException) MarshalEvent(pm protocol.PayloadMarshaler) (m
 
 func newErrorInternalFailureException(v protocol.ResponseMetadata) error {
 	return &InternalFailureException{
-		respMetadata: v,
+		RespMetadata: v,
 	}
 }
 
 // Code returns the exception type name.
-func (s InternalFailureException) Code() string {
+func (s *InternalFailureException) Code() string {
 	return "InternalFailureException"
 }
 
 // Message returns the exception's message.
-func (s InternalFailureException) Message() string {
+func (s *InternalFailureException) Message() string {
 	if s.Message_ != nil {
 		return *s.Message_
 	}
@@ -5138,29 +5143,29 @@ func (s InternalFailureException) Message() string {
 }
 
 // OrigErr always returns nil, satisfies awserr.Error interface.
-func (s InternalFailureException) OrigErr() error {
+func (s *InternalFailureException) OrigErr() error {
 	return nil
 }
 
-func (s InternalFailureException) Error() string {
+func (s *InternalFailureException) Error() string {
 	return fmt.Sprintf("%s: %s", s.Code(), s.Message())
 }
 
 // Status code returns the HTTP status code for the request's response error.
-func (s InternalFailureException) StatusCode() int {
-	return s.respMetadata.StatusCode
+func (s *InternalFailureException) StatusCode() int {
+	return s.RespMetadata.StatusCode
 }
 
 // RequestID returns the service's response RequestID for request.
-func (s InternalFailureException) RequestID() string {
-	return s.respMetadata.RequestID
+func (s *InternalFailureException) RequestID() string {
+	return s.RespMetadata.RequestID
 }
 
 // A specified parameter exceeds its restrictions, is not supported, or can't
 // be used. For more information, see the returned message.
 type InvalidArgumentException struct {
-	_            struct{} `type:"structure"`
-	respMetadata protocol.ResponseMetadata
+	_            struct{}                  `type:"structure"`
+	RespMetadata protocol.ResponseMetadata `json:"-" xml:"-"`
 
 	// A message that provides information about the error.
 	Message_ *string `locationName:"message" type:"string"`
@@ -5178,17 +5183,17 @@ func (s InvalidArgumentException) GoString() string {
 
 func newErrorInvalidArgumentException(v protocol.ResponseMetadata) error {
 	return &InvalidArgumentException{
-		respMetadata: v,
+		RespMetadata: v,
 	}
 }
 
 // Code returns the exception type name.
-func (s InvalidArgumentException) Code() string {
+func (s *InvalidArgumentException) Code() string {
 	return "InvalidArgumentException"
 }
 
 // Message returns the exception's message.
-func (s InvalidArgumentException) Message() string {
+func (s *InvalidArgumentException) Message() string {
 	if s.Message_ != nil {
 		return *s.Message_
 	}
@@ -5196,29 +5201,29 @@ func (s InvalidArgumentException) Message() string {
 }
 
 // OrigErr always returns nil, satisfies awserr.Error interface.
-func (s InvalidArgumentException) OrigErr() error {
+func (s *InvalidArgumentException) OrigErr() error {
 	return nil
 }
 
-func (s InvalidArgumentException) Error() string {
+func (s *InvalidArgumentException) Error() string {
 	return fmt.Sprintf("%s: %s", s.Code(), s.Message())
 }
 
 // Status code returns the HTTP status code for the request's response error.
-func (s InvalidArgumentException) StatusCode() int {
-	return s.respMetadata.StatusCode
+func (s *InvalidArgumentException) StatusCode() int {
+	return s.RespMetadata.StatusCode
 }
 
 // RequestID returns the service's response RequestID for request.
-func (s InvalidArgumentException) RequestID() string {
-	return s.respMetadata.RequestID
+func (s *InvalidArgumentException) RequestID() string {
+	return s.RespMetadata.RequestID
 }
 
 // The ciphertext references a key that doesn't exist or that you don't have
 // access to.
 type KMSAccessDeniedException struct {
-	_            struct{} `type:"structure"`
-	respMetadata protocol.ResponseMetadata
+	_            struct{}                  `type:"structure"`
+	RespMetadata protocol.ResponseMetadata `json:"-" xml:"-"`
 
 	// A message that provides information about the error.
 	Message_ *string `locationName:"message" type:"string"`
@@ -5251,6 +5256,8 @@ func (s *KMSAccessDeniedException) UnmarshalEvent(
 	return nil
 }
 
+// MarshalEvent marshals the type into an stream event value. This method
+// should only used internally within the SDK's EventStream handling.
 func (s *KMSAccessDeniedException) MarshalEvent(pm protocol.PayloadMarshaler) (msg eventstream.Message, err error) {
 	msg.Headers.Set(eventstreamapi.MessageTypeHeader, eventstream.StringValue(eventstreamapi.ExceptionMessageType))
 	var buf bytes.Buffer
@@ -5263,17 +5270,17 @@ func (s *KMSAccessDeniedException) MarshalEvent(pm protocol.PayloadMarshaler) (m
 
 func newErrorKMSAccessDeniedException(v protocol.ResponseMetadata) error {
 	return &KMSAccessDeniedException{
-		respMetadata: v,
+		RespMetadata: v,
 	}
 }
 
 // Code returns the exception type name.
-func (s KMSAccessDeniedException) Code() string {
+func (s *KMSAccessDeniedException) Code() string {
 	return "KMSAccessDeniedException"
 }
 
 // Message returns the exception's message.
-func (s KMSAccessDeniedException) Message() string {
+func (s *KMSAccessDeniedException) Message() string {
 	if s.Message_ != nil {
 		return *s.Message_
 	}
@@ -5281,29 +5288,29 @@ func (s KMSAccessDeniedException) Message() string {
 }
 
 // OrigErr always returns nil, satisfies awserr.Error interface.
-func (s KMSAccessDeniedException) OrigErr() error {
+func (s *KMSAccessDeniedException) OrigErr() error {
 	return nil
 }
 
-func (s KMSAccessDeniedException) Error() string {
+func (s *KMSAccessDeniedException) Error() string {
 	return fmt.Sprintf("%s: %s", s.Code(), s.Message())
 }
 
 // Status code returns the HTTP status code for the request's response error.
-func (s KMSAccessDeniedException) StatusCode() int {
-	return s.respMetadata.StatusCode
+func (s *KMSAccessDeniedException) StatusCode() int {
+	return s.RespMetadata.StatusCode
 }
 
 // RequestID returns the service's response RequestID for request.
-func (s KMSAccessDeniedException) RequestID() string {
-	return s.respMetadata.RequestID
+func (s *KMSAccessDeniedException) RequestID() string {
+	return s.RespMetadata.RequestID
 }
 
 // The request was rejected because the specified customer master key (CMK)
 // isn't enabled.
 type KMSDisabledException struct {
-	_            struct{} `type:"structure"`
-	respMetadata protocol.ResponseMetadata
+	_            struct{}                  `type:"structure"`
+	RespMetadata protocol.ResponseMetadata `json:"-" xml:"-"`
 
 	// A message that provides information about the error.
 	Message_ *string `locationName:"message" type:"string"`
@@ -5336,6 +5343,8 @@ func (s *KMSDisabledException) UnmarshalEvent(
 	return nil
 }
 
+// MarshalEvent marshals the type into an stream event value. This method
+// should only used internally within the SDK's EventStream handling.
 func (s *KMSDisabledException) MarshalEvent(pm protocol.PayloadMarshaler) (msg eventstream.Message, err error) {
 	msg.Headers.Set(eventstreamapi.MessageTypeHeader, eventstream.StringValue(eventstreamapi.ExceptionMessageType))
 	var buf bytes.Buffer
@@ -5348,17 +5357,17 @@ func (s *KMSDisabledException) MarshalEvent(pm protocol.PayloadMarshaler) (msg e
 
 func newErrorKMSDisabledException(v protocol.ResponseMetadata) error {
 	return &KMSDisabledException{
-		respMetadata: v,
+		RespMetadata: v,
 	}
 }
 
 // Code returns the exception type name.
-func (s KMSDisabledException) Code() string {
+func (s *KMSDisabledException) Code() string {
 	return "KMSDisabledException"
 }
 
 // Message returns the exception's message.
-func (s KMSDisabledException) Message() string {
+func (s *KMSDisabledException) Message() string {
 	if s.Message_ != nil {
 		return *s.Message_
 	}
@@ -5366,22 +5375,22 @@ func (s KMSDisabledException) Message() string {
 }
 
 // OrigErr always returns nil, satisfies awserr.Error interface.
-func (s KMSDisabledException) OrigErr() error {
+func (s *KMSDisabledException) OrigErr() error {
 	return nil
 }
 
-func (s KMSDisabledException) Error() string {
+func (s *KMSDisabledException) Error() string {
 	return fmt.Sprintf("%s: %s", s.Code(), s.Message())
 }
 
 // Status code returns the HTTP status code for the request's response error.
-func (s KMSDisabledException) StatusCode() int {
-	return s.respMetadata.StatusCode
+func (s *KMSDisabledException) StatusCode() int {
+	return s.RespMetadata.StatusCode
 }
 
 // RequestID returns the service's response RequestID for request.
-func (s KMSDisabledException) RequestID() string {
-	return s.respMetadata.RequestID
+func (s *KMSDisabledException) RequestID() string {
+	return s.RespMetadata.RequestID
 }
 
 // The request was rejected because the state of the specified resource isn't
@@ -5389,8 +5398,8 @@ func (s KMSDisabledException) RequestID() string {
 // of a Customer Master Key (http://docs.aws.amazon.com/kms/latest/developerguide/key-state.html)
 // in the AWS Key Management Service Developer Guide.
 type KMSInvalidStateException struct {
-	_            struct{} `type:"structure"`
-	respMetadata protocol.ResponseMetadata
+	_            struct{}                  `type:"structure"`
+	RespMetadata protocol.ResponseMetadata `json:"-" xml:"-"`
 
 	// A message that provides information about the error.
 	Message_ *string `locationName:"message" type:"string"`
@@ -5423,6 +5432,8 @@ func (s *KMSInvalidStateException) UnmarshalEvent(
 	return nil
 }
 
+// MarshalEvent marshals the type into an stream event value. This method
+// should only used internally within the SDK's EventStream handling.
 func (s *KMSInvalidStateException) MarshalEvent(pm protocol.PayloadMarshaler) (msg eventstream.Message, err error) {
 	msg.Headers.Set(eventstreamapi.MessageTypeHeader, eventstream.StringValue(eventstreamapi.ExceptionMessageType))
 	var buf bytes.Buffer
@@ -5435,17 +5446,17 @@ func (s *KMSInvalidStateException) MarshalEvent(pm protocol.PayloadMarshaler) (m
 
 func newErrorKMSInvalidStateException(v protocol.ResponseMetadata) error {
 	return &KMSInvalidStateException{
-		respMetadata: v,
+		RespMetadata: v,
 	}
 }
 
 // Code returns the exception type name.
-func (s KMSInvalidStateException) Code() string {
+func (s *KMSInvalidStateException) Code() string {
 	return "KMSInvalidStateException"
 }
 
 // Message returns the exception's message.
-func (s KMSInvalidStateException) Message() string {
+func (s *KMSInvalidStateException) Message() string {
 	if s.Message_ != nil {
 		return *s.Message_
 	}
@@ -5453,29 +5464,29 @@ func (s KMSInvalidStateException) Message() string {
 }
 
 // OrigErr always returns nil, satisfies awserr.Error interface.
-func (s KMSInvalidStateException) OrigErr() error {
+func (s *KMSInvalidStateException) OrigErr() error {
 	return nil
 }
 
-func (s KMSInvalidStateException) Error() string {
+func (s *KMSInvalidStateException) Error() string {
 	return fmt.Sprintf("%s: %s", s.Code(), s.Message())
 }
 
 // Status code returns the HTTP status code for the request's response error.
-func (s KMSInvalidStateException) StatusCode() int {
-	return s.respMetadata.StatusCode
+func (s *KMSInvalidStateException) StatusCode() int {
+	return s.RespMetadata.StatusCode
 }
 
 // RequestID returns the service's response RequestID for request.
-func (s KMSInvalidStateException) RequestID() string {
-	return s.respMetadata.RequestID
+func (s *KMSInvalidStateException) RequestID() string {
+	return s.RespMetadata.RequestID
 }
 
 // The request was rejected because the specified entity or resource can't be
 // found.
 type KMSNotFoundException struct {
-	_            struct{} `type:"structure"`
-	respMetadata protocol.ResponseMetadata
+	_            struct{}                  `type:"structure"`
+	RespMetadata protocol.ResponseMetadata `json:"-" xml:"-"`
 
 	// A message that provides information about the error.
 	Message_ *string `locationName:"message" type:"string"`
@@ -5508,6 +5519,8 @@ func (s *KMSNotFoundException) UnmarshalEvent(
 	return nil
 }
 
+// MarshalEvent marshals the type into an stream event value. This method
+// should only used internally within the SDK's EventStream handling.
 func (s *KMSNotFoundException) MarshalEvent(pm protocol.PayloadMarshaler) (msg eventstream.Message, err error) {
 	msg.Headers.Set(eventstreamapi.MessageTypeHeader, eventstream.StringValue(eventstreamapi.ExceptionMessageType))
 	var buf bytes.Buffer
@@ -5520,17 +5533,17 @@ func (s *KMSNotFoundException) MarshalEvent(pm protocol.PayloadMarshaler) (msg e
 
 func newErrorKMSNotFoundException(v protocol.ResponseMetadata) error {
 	return &KMSNotFoundException{
-		respMetadata: v,
+		RespMetadata: v,
 	}
 }
 
 // Code returns the exception type name.
-func (s KMSNotFoundException) Code() string {
+func (s *KMSNotFoundException) Code() string {
 	return "KMSNotFoundException"
 }
 
 // Message returns the exception's message.
-func (s KMSNotFoundException) Message() string {
+func (s *KMSNotFoundException) Message() string {
 	if s.Message_ != nil {
 		return *s.Message_
 	}
@@ -5538,28 +5551,28 @@ func (s KMSNotFoundException) Message() string {
 }
 
 // OrigErr always returns nil, satisfies awserr.Error interface.
-func (s KMSNotFoundException) OrigErr() error {
+func (s *KMSNotFoundException) OrigErr() error {
 	return nil
 }
 
-func (s KMSNotFoundException) Error() string {
+func (s *KMSNotFoundException) Error() string {
 	return fmt.Sprintf("%s: %s", s.Code(), s.Message())
 }
 
 // Status code returns the HTTP status code for the request's response error.
-func (s KMSNotFoundException) StatusCode() int {
-	return s.respMetadata.StatusCode
+func (s *KMSNotFoundException) StatusCode() int {
+	return s.RespMetadata.StatusCode
 }
 
 // RequestID returns the service's response RequestID for request.
-func (s KMSNotFoundException) RequestID() string {
-	return s.respMetadata.RequestID
+func (s *KMSNotFoundException) RequestID() string {
+	return s.RespMetadata.RequestID
 }
 
 // The AWS access key ID needs a subscription for the service.
 type KMSOptInRequired struct {
-	_            struct{} `type:"structure"`
-	respMetadata protocol.ResponseMetadata
+	_            struct{}                  `type:"structure"`
+	RespMetadata protocol.ResponseMetadata `json:"-" xml:"-"`
 
 	// A message that provides information about the error.
 	Message_ *string `locationName:"message" type:"string"`
@@ -5592,6 +5605,8 @@ func (s *KMSOptInRequired) UnmarshalEvent(
 	return nil
 }
 
+// MarshalEvent marshals the type into an stream event value. This method
+// should only used internally within the SDK's EventStream handling.
 func (s *KMSOptInRequired) MarshalEvent(pm protocol.PayloadMarshaler) (msg eventstream.Message, err error) {
 	msg.Headers.Set(eventstreamapi.MessageTypeHeader, eventstream.StringValue(eventstreamapi.ExceptionMessageType))
 	var buf bytes.Buffer
@@ -5604,17 +5619,17 @@ func (s *KMSOptInRequired) MarshalEvent(pm protocol.PayloadMarshaler) (msg event
 
 func newErrorKMSOptInRequired(v protocol.ResponseMetadata) error {
 	return &KMSOptInRequired{
-		respMetadata: v,
+		RespMetadata: v,
 	}
 }
 
 // Code returns the exception type name.
-func (s KMSOptInRequired) Code() string {
+func (s *KMSOptInRequired) Code() string {
 	return "KMSOptInRequired"
 }
 
 // Message returns the exception's message.
-func (s KMSOptInRequired) Message() string {
+func (s *KMSOptInRequired) Message() string {
 	if s.Message_ != nil {
 		return *s.Message_
 	}
@@ -5622,30 +5637,30 @@ func (s KMSOptInRequired) Message() string {
 }
 
 // OrigErr always returns nil, satisfies awserr.Error interface.
-func (s KMSOptInRequired) OrigErr() error {
+func (s *KMSOptInRequired) OrigErr() error {
 	return nil
 }
 
-func (s KMSOptInRequired) Error() string {
+func (s *KMSOptInRequired) Error() string {
 	return fmt.Sprintf("%s: %s", s.Code(), s.Message())
 }
 
 // Status code returns the HTTP status code for the request's response error.
-func (s KMSOptInRequired) StatusCode() int {
-	return s.respMetadata.StatusCode
+func (s *KMSOptInRequired) StatusCode() int {
+	return s.RespMetadata.StatusCode
 }
 
 // RequestID returns the service's response RequestID for request.
-func (s KMSOptInRequired) RequestID() string {
-	return s.respMetadata.RequestID
+func (s *KMSOptInRequired) RequestID() string {
+	return s.RespMetadata.RequestID
 }
 
 // The request was denied due to request throttling. For more information about
 // throttling, see Limits (http://docs.aws.amazon.com/kms/latest/developerguide/limits.html#requests-per-second)
 // in the AWS Key Management Service Developer Guide.
 type KMSThrottlingException struct {
-	_            struct{} `type:"structure"`
-	respMetadata protocol.ResponseMetadata
+	_            struct{}                  `type:"structure"`
+	RespMetadata protocol.ResponseMetadata `json:"-" xml:"-"`
 
 	// A message that provides information about the error.
 	Message_ *string `locationName:"message" type:"string"`
@@ -5678,6 +5693,8 @@ func (s *KMSThrottlingException) UnmarshalEvent(
 	return nil
 }
 
+// MarshalEvent marshals the type into an stream event value. This method
+// should only used internally within the SDK's EventStream handling.
 func (s *KMSThrottlingException) MarshalEvent(pm protocol.PayloadMarshaler) (msg eventstream.Message, err error) {
 	msg.Headers.Set(eventstreamapi.MessageTypeHeader, eventstream.StringValue(eventstreamapi.ExceptionMessageType))
 	var buf bytes.Buffer
@@ -5690,17 +5707,17 @@ func (s *KMSThrottlingException) MarshalEvent(pm protocol.PayloadMarshaler) (msg
 
 func newErrorKMSThrottlingException(v protocol.ResponseMetadata) error {
 	return &KMSThrottlingException{
-		respMetadata: v,
+		RespMetadata: v,
 	}
 }
 
 // Code returns the exception type name.
-func (s KMSThrottlingException) Code() string {
+func (s *KMSThrottlingException) Code() string {
 	return "KMSThrottlingException"
 }
 
 // Message returns the exception's message.
-func (s KMSThrottlingException) Message() string {
+func (s *KMSThrottlingException) Message() string {
 	if s.Message_ != nil {
 		return *s.Message_
 	}
@@ -5708,29 +5725,29 @@ func (s KMSThrottlingException) Message() string {
 }
 
 // OrigErr always returns nil, satisfies awserr.Error interface.
-func (s KMSThrottlingException) OrigErr() error {
+func (s *KMSThrottlingException) OrigErr() error {
 	return nil
 }
 
-func (s KMSThrottlingException) Error() string {
+func (s *KMSThrottlingException) Error() string {
 	return fmt.Sprintf("%s: %s", s.Code(), s.Message())
 }
 
 // Status code returns the HTTP status code for the request's response error.
-func (s KMSThrottlingException) StatusCode() int {
-	return s.respMetadata.StatusCode
+func (s *KMSThrottlingException) StatusCode() int {
+	return s.RespMetadata.StatusCode
 }
 
 // RequestID returns the service's response RequestID for request.
-func (s KMSThrottlingException) RequestID() string {
-	return s.respMetadata.RequestID
+func (s *KMSThrottlingException) RequestID() string {
+	return s.RespMetadata.RequestID
 }
 
 // The requested resource exceeds the maximum number allowed, or the number
 // of concurrent stream requests exceeds the maximum number allowed.
 type LimitExceededException struct {
-	_            struct{} `type:"structure"`
-	respMetadata protocol.ResponseMetadata
+	_            struct{}                  `type:"structure"`
+	RespMetadata protocol.ResponseMetadata `json:"-" xml:"-"`
 
 	// A message that provides information about the error.
 	Message_ *string `locationName:"message" type:"string"`
@@ -5748,17 +5765,17 @@ func (s LimitExceededException) GoString() string {
 
 func newErrorLimitExceededException(v protocol.ResponseMetadata) error {
 	return &LimitExceededException{
-		respMetadata: v,
+		RespMetadata: v,
 	}
 }
 
 // Code returns the exception type name.
-func (s LimitExceededException) Code() string {
+func (s *LimitExceededException) Code() string {
 	return "LimitExceededException"
 }
 
 // Message returns the exception's message.
-func (s LimitExceededException) Message() string {
+func (s *LimitExceededException) Message() string {
 	if s.Message_ != nil {
 		return *s.Message_
 	}
@@ -5766,22 +5783,22 @@ func (s LimitExceededException) Message() string {
 }
 
 // OrigErr always returns nil, satisfies awserr.Error interface.
-func (s LimitExceededException) OrigErr() error {
+func (s *LimitExceededException) OrigErr() error {
 	return nil
 }
 
-func (s LimitExceededException) Error() string {
+func (s *LimitExceededException) Error() string {
 	return fmt.Sprintf("%s: %s", s.Code(), s.Message())
 }
 
 // Status code returns the HTTP status code for the request's response error.
-func (s LimitExceededException) StatusCode() int {
-	return s.respMetadata.StatusCode
+func (s *LimitExceededException) StatusCode() int {
+	return s.RespMetadata.StatusCode
 }
 
 // RequestID returns the service's response RequestID for request.
-func (s LimitExceededException) RequestID() string {
-	return s.respMetadata.RequestID
+func (s *LimitExceededException) RequestID() string {
+	return s.RespMetadata.RequestID
 }
 
 type ListShardsInput struct {
@@ -6387,8 +6404,8 @@ func (s MergeShardsOutput) GoString() string {
 // Exponential Backoff in AWS (http://docs.aws.amazon.com/general/latest/gr/api-retries.html)
 // in the AWS General Reference.
 type ProvisionedThroughputExceededException struct {
-	_            struct{} `type:"structure"`
-	respMetadata protocol.ResponseMetadata
+	_            struct{}                  `type:"structure"`
+	RespMetadata protocol.ResponseMetadata `json:"-" xml:"-"`
 
 	// A message that provides information about the error.
 	Message_ *string `locationName:"message" type:"string"`
@@ -6406,17 +6423,17 @@ func (s ProvisionedThroughputExceededException) GoString() string {
 
 func newErrorProvisionedThroughputExceededException(v protocol.ResponseMetadata) error {
 	return &ProvisionedThroughputExceededException{
-		respMetadata: v,
+		RespMetadata: v,
 	}
 }
 
 // Code returns the exception type name.
-func (s ProvisionedThroughputExceededException) Code() string {
+func (s *ProvisionedThroughputExceededException) Code() string {
 	return "ProvisionedThroughputExceededException"
 }
 
 // Message returns the exception's message.
-func (s ProvisionedThroughputExceededException) Message() string {
+func (s *ProvisionedThroughputExceededException) Message() string {
 	if s.Message_ != nil {
 		return *s.Message_
 	}
@@ -6424,22 +6441,22 @@ func (s ProvisionedThroughputExceededException) Message() string {
 }
 
 // OrigErr always returns nil, satisfies awserr.Error interface.
-func (s ProvisionedThroughputExceededException) OrigErr() error {
+func (s *ProvisionedThroughputExceededException) OrigErr() error {
 	return nil
 }
 
-func (s ProvisionedThroughputExceededException) Error() string {
+func (s *ProvisionedThroughputExceededException) Error() string {
 	return fmt.Sprintf("%s: %s", s.Code(), s.Message())
 }
 
 // Status code returns the HTTP status code for the request's response error.
-func (s ProvisionedThroughputExceededException) StatusCode() int {
-	return s.respMetadata.StatusCode
+func (s *ProvisionedThroughputExceededException) StatusCode() int {
+	return s.RespMetadata.StatusCode
 }
 
 // RequestID returns the service's response RequestID for request.
-func (s ProvisionedThroughputExceededException) RequestID() string {
-	return s.respMetadata.RequestID
+func (s *ProvisionedThroughputExceededException) RequestID() string {
+	return s.RespMetadata.RequestID
 }
 
 // Represents the input for PutRecord.
@@ -7107,8 +7124,8 @@ func (s RemoveTagsFromStreamOutput) GoString() string {
 // The resource is not available for this operation. For successful operation,
 // the resource must be in the ACTIVE state.
 type ResourceInUseException struct {
-	_            struct{} `type:"structure"`
-	respMetadata protocol.ResponseMetadata
+	_            struct{}                  `type:"structure"`
+	RespMetadata protocol.ResponseMetadata `json:"-" xml:"-"`
 
 	// A message that provides information about the error.
 	Message_ *string `locationName:"message" type:"string"`
@@ -7141,6 +7158,8 @@ func (s *ResourceInUseException) UnmarshalEvent(
 	return nil
 }
 
+// MarshalEvent marshals the type into an stream event value. This method
+// should only used internally within the SDK's EventStream handling.
 func (s *ResourceInUseException) MarshalEvent(pm protocol.PayloadMarshaler) (msg eventstream.Message, err error) {
 	msg.Headers.Set(eventstreamapi.MessageTypeHeader, eventstream.StringValue(eventstreamapi.ExceptionMessageType))
 	var buf bytes.Buffer
@@ -7153,17 +7172,17 @@ func (s *ResourceInUseException) MarshalEvent(pm protocol.PayloadMarshaler) (msg
 
 func newErrorResourceInUseException(v protocol.ResponseMetadata) error {
 	return &ResourceInUseException{
-		respMetadata: v,
+		RespMetadata: v,
 	}
 }
 
 // Code returns the exception type name.
-func (s ResourceInUseException) Code() string {
+func (s *ResourceInUseException) Code() string {
 	return "ResourceInUseException"
 }
 
 // Message returns the exception's message.
-func (s ResourceInUseException) Message() string {
+func (s *ResourceInUseException) Message() string {
 	if s.Message_ != nil {
 		return *s.Message_
 	}
@@ -7171,29 +7190,29 @@ func (s ResourceInUseException) Message() string {
 }
 
 // OrigErr always returns nil, satisfies awserr.Error interface.
-func (s ResourceInUseException) OrigErr() error {
+func (s *ResourceInUseException) OrigErr() error {
 	return nil
 }
 
-func (s ResourceInUseException) Error() string {
+func (s *ResourceInUseException) Error() string {
 	return fmt.Sprintf("%s: %s", s.Code(), s.Message())
 }
 
 // Status code returns the HTTP status code for the request's response error.
-func (s ResourceInUseException) StatusCode() int {
-	return s.respMetadata.StatusCode
+func (s *ResourceInUseException) StatusCode() int {
+	return s.RespMetadata.StatusCode
 }
 
 // RequestID returns the service's response RequestID for request.
-func (s ResourceInUseException) RequestID() string {
-	return s.respMetadata.RequestID
+func (s *ResourceInUseException) RequestID() string {
+	return s.RespMetadata.RequestID
 }
 
 // The requested resource could not be found. The stream might not be specified
 // correctly.
 type ResourceNotFoundException struct {
-	_            struct{} `type:"structure"`
-	respMetadata protocol.ResponseMetadata
+	_            struct{}                  `type:"structure"`
+	RespMetadata protocol.ResponseMetadata `json:"-" xml:"-"`
 
 	// A message that provides information about the error.
 	Message_ *string `locationName:"message" type:"string"`
@@ -7226,6 +7245,8 @@ func (s *ResourceNotFoundException) UnmarshalEvent(
 	return nil
 }
 
+// MarshalEvent marshals the type into an stream event value. This method
+// should only used internally within the SDK's EventStream handling.
 func (s *ResourceNotFoundException) MarshalEvent(pm protocol.PayloadMarshaler) (msg eventstream.Message, err error) {
 	msg.Headers.Set(eventstreamapi.MessageTypeHeader, eventstream.StringValue(eventstreamapi.ExceptionMessageType))
 	var buf bytes.Buffer
@@ -7238,17 +7259,17 @@ func (s *ResourceNotFoundException) MarshalEvent(pm protocol.PayloadMarshaler) (
 
 func newErrorResourceNotFoundException(v protocol.ResponseMetadata) error {
 	return &ResourceNotFoundException{
-		respMetadata: v,
+		RespMetadata: v,
 	}
 }
 
 // Code returns the exception type name.
-func (s ResourceNotFoundException) Code() string {
+func (s *ResourceNotFoundException) Code() string {
 	return "ResourceNotFoundException"
 }
 
 // Message returns the exception's message.
-func (s ResourceNotFoundException) Message() string {
+func (s *ResourceNotFoundException) Message() string {
 	if s.Message_ != nil {
 		return *s.Message_
 	}
@@ -7256,22 +7277,22 @@ func (s ResourceNotFoundException) Message() string {
 }
 
 // OrigErr always returns nil, satisfies awserr.Error interface.
-func (s ResourceNotFoundException) OrigErr() error {
+func (s *ResourceNotFoundException) OrigErr() error {
 	return nil
 }
 
-func (s ResourceNotFoundException) Error() string {
+func (s *ResourceNotFoundException) Error() string {
 	return fmt.Sprintf("%s: %s", s.Code(), s.Message())
 }
 
 // Status code returns the HTTP status code for the request's response error.
-func (s ResourceNotFoundException) StatusCode() int {
-	return s.respMetadata.StatusCode
+func (s *ResourceNotFoundException) StatusCode() int {
+	return s.RespMetadata.StatusCode
 }
 
 // RequestID returns the service's response RequestID for request.
-func (s ResourceNotFoundException) RequestID() string {
-	return s.respMetadata.RequestID
+func (s *ResourceNotFoundException) RequestID() string {
+	return s.RespMetadata.RequestID
 }
 
 // The range of possible sequence numbers for the shard.
@@ -8095,6 +8116,8 @@ func (s *SubscribeToShardEvent) UnmarshalEvent(
 	return nil
 }
 
+// MarshalEvent marshals the type into an stream event value. This method
+// should only used internally within the SDK's EventStream handling.
 func (s *SubscribeToShardEvent) MarshalEvent(pm protocol.PayloadMarshaler) (msg eventstream.Message, err error) {
 	msg.Headers.Set(eventstreamapi.MessageTypeHeader, eventstream.StringValue(eventstreamapi.EventMessageType))
 	var buf bytes.Buffer
@@ -8125,6 +8148,7 @@ type SubscribeToShardEventStreamEvent interface {
 // These events are:
 //
 //     * SubscribeToShardEvent
+//     * SubscribeToShardEventStreamUnknownEvent
 type SubscribeToShardEventStreamReader interface {
 	// Returns a channel of events as they are read from the event stream.
 	Events() <-chan SubscribeToShardEventStreamEvent
@@ -8199,6 +8223,9 @@ func (r *readSubscribeToShardEventStream) readEventStream() {
 				return
 			default:
 			}
+			if _, ok := err.(*eventstreamapi.UnknownMessageTypeError); ok {
+				continue
+			}
 			r.err.SetError(err)
 			return
 		}
@@ -8238,12 +8265,37 @@ func (u unmarshalerForSubscribeToShardEventStreamEvent) UnmarshalerForEventName(
 	case "ResourceNotFoundException":
 		return newErrorResourceNotFoundException(u.metadata).(eventstreamapi.Unmarshaler), nil
 	default:
-		return nil, awserr.New(
-			request.ErrCodeSerialization,
-			fmt.Sprintf("unknown event type name, %s, for SubscribeToShardEventStream", eventType),
-			nil,
-		)
+		return &SubscribeToShardEventStreamUnknownEvent{Type: eventType}, nil
 	}
+}
+
+// SubscribeToShardEventStreamUnknownEvent provides a failsafe event for the
+// SubscribeToShardEventStream group of events when an unknown event is received.
+type SubscribeToShardEventStreamUnknownEvent struct {
+	Type    string
+	Message eventstream.Message
+}
+
+// The SubscribeToShardEventStreamUnknownEvent is and event in the SubscribeToShardEventStream
+// group of events.
+func (s *SubscribeToShardEventStreamUnknownEvent) eventSubscribeToShardEventStream() {}
+
+// MarshalEvent marshals the type into an stream event value. This method
+// should only used internally within the SDK's EventStream handling.
+func (e *SubscribeToShardEventStreamUnknownEvent) MarshalEvent(pm protocol.PayloadMarshaler) (
+	msg eventstream.Message, err error,
+) {
+	return e.Message.Clone(), nil
+}
+
+// UnmarshalEvent unmarshals the EventStream Message into the SubscribeToShardEventStreamData value.
+// This method is only used internally within the SDK's EventStream handling.
+func (e *SubscribeToShardEventStreamUnknownEvent) UnmarshalEvent(
+	payloadUnmarshaler protocol.PayloadUnmarshaler,
+	msg eventstream.Message,
+) error {
+	e.Message = msg.Clone()
+	return nil
 }
 
 type SubscribeToShardInput struct {
@@ -8368,6 +8420,8 @@ func (s *SubscribeToShardOutput) UnmarshalEvent(
 	return nil
 }
 
+// MarshalEvent marshals the type into an stream event value. This method
+// should only used internally within the SDK's EventStream handling.
 func (s *SubscribeToShardOutput) MarshalEvent(pm protocol.PayloadMarshaler) (msg eventstream.Message, err error) {
 	msg.Headers.Set(eventstreamapi.MessageTypeHeader, eventstream.StringValue(eventstreamapi.EventMessageType))
 	var buf bytes.Buffer
